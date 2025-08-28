@@ -20,7 +20,8 @@ from django.db.models import (
     UUIDField,
     DateField,
     ImageField,
-    JSONField
+    JSONField,
+    ManyToManyField,
 )
 
 
@@ -30,10 +31,14 @@ from django_countries.fields import CountryField
 from easy_thumbnails.fields import ThumbnailerImageField
 from phonenumber_field.modelfields import PhoneNumberField
 from rest_framework.exceptions import ValidationError
+from rest_framework.serializers import ValidationError as SerializerValidationError
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import re
+from django.contrib.postgres.indexes import GinIndex  # GinIndex
+
+from django.db import models
 
 from .abstract_models import (
     AbstractAddress,
@@ -67,6 +72,15 @@ from .model_helpers import (
     random_pin,
     timezone_date,
 )
+
+from .utils import _prefix_from_name, _next_running
+from django.contrib.auth.models import Permission, Group
+#from .models import Collection
+from django.contrib.postgres.search import SearchVector
+from .taxonomies import DynamicEnumType
+#from .taxonomies import DynamicEnum
+from django.db.utils import IntegrityError
+from typing import Collection
 
 from .custom_fields import (
     GSTField,
@@ -402,4 +416,216 @@ class Entity(ArchiveField, AbstractGenericEntityField):
     # def has_zoho(self):
     #     return bool(self.zoho_refresh_token)
 
+
+
+class DynamicEnum(CreateUpdateStatus):
+    name = CharField(max_length=255)
+    code = CharField(max_length=255, blank=True)
+    enum = CharField(max_length=128, choices=DynamicEnumType.choices)
+    tenants = ManyToManyField(to="Tenant")
+
+    def __str__(self):
+        return f"{self.name}"
+
+    @property
+    def enum_display(self):
+        return self.get_enum_display()
+
+class Document(AbstractDocument):
+    tenant = ForeignKey(
+        Tenant, on_delete=PROTECT, limit_choices_to=limit_to_active
+    )
+
+    def __str__(self):
+        return f"{self.document_name} / {self.tenant}"
+
+class EntityUserAccess(models.Model):
+    uid = UUIDField(default=uuid.uuid4)
+    entity = ForeignKey(to=Entity, on_delete=PROTECT)
+    user = ForeignKey(to=User, on_delete=PROTECT)
+    permissions = ManyToManyField(to=Permission, blank=True)
+    groups = ManyToManyField(to=Group, blank=True)
+
+    def __str__(self):
+        return f"{self.user} / {self.entity}"
+
+    class Meta:
+        unique_together = (
+            (
+                "user",
+                "entity",
+            ),
+        )
+
+    def validate_unique(self, exclude: Collection[str] | None = ...) -> None:
+        if self.pk is None:
+            qs = EntityUserAccess.objects.filter(
+                user=self.user,
+                entity=self.entity,
+            )
+            if qs.exists():
+                raise ValidationError(
+                    {
+                        "entity": "An entry for this User and Entity already exists"
+                    }
+                )
+        return super().validate_unique(exclude)
+
+    def save(self, **kwargs):
+        self.validate_unique(None)
+        super(EntityUserAccess, self).save(**kwargs)
+    
+class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
+    # --- Old Meta (commented out) ---
+    # class Meta:
+    #     unique_together = (
+    #         "name",
+    #         "tenant",
+    #     )
+    #     indexes = [
+    #         GinIndex(
+    #             SearchVector("name", config="english"), name="center_name_gin"
+    #         ),
+    #     ]
+
+    class Meta:
+        unique_together = (("short_name", "tenant"),)
+        indexes = [
+            GinIndex(
+                SearchVector("name", config="english"), name="center_name_gin"
+            ),
+        ]
+
+    tenant = ForeignKey(
+        Tenant, on_delete=PROTECT,
+         # limit_choices_to=limit_to_active
+    )
+    name = CharField(max_length=255)
+    short_name = UpperCharField(max_length=16)
+    code = UpperCharField(max_length=32, blank=True)
+    start_date = DateField(default=timezone.now)
+    end_date = DateField(default=timezone.now)
+    gst_effective_date = DateField(
+        validators=[past_date_check], blank=True, null=True
+    )
+    gstin = GSTField(verbose_name="GSTIN", blank=True)
+
+    # --- Old factory license fields (commented out) ---
+    # factory_license_number = CharField(max_length=255, blank=True)
+    # factory_license_date = DateField(
+    #     validators=[past_date_check], blank=True, null=True
+    # )
+    # factory_license_expiry_date = DateField(blank=True, null=True)
+
+    # --- Updated with defaults ---
+    factory_license_number = CharField(max_length=255, blank=True, default="9999999999")
+    factory_license_date = DateField(
+        validators=[past_date_check],
+        default=timezone.now,
+    )
+    # factory_license_expiry_date = DateField(
+    #     default=lambda: timezone.now().date() + timedelta(days=365*100)
+    # )
+
+    factory_license_expiry_date = DateField(
+    default=timezone.now().date() + timedelta(days=365*100)
+    )
+    entity = ForeignKey(to="Entity", on_delete=PROTECT)
+    gst_certificates = ManyToManyField(to="Document", blank=True)
+#    processes = ManyToManyField(to="common.Process", blank=True)
+    factory_license_issuing_agency = ForeignKey(
+        to="DynamicEnum",
+        on_delete=PROTECT,
+        limit_choices_to={
+            "enum": DynamicEnumType.FACTORY_LICENCE_ISSUING_AGENCY
+        },
+        blank=True,
+        null=True,
+    )
+    tally_mapping_name = CharField(max_length=255, blank=True, default="")
+    external_ids = JSONField(blank=True, default=dict)
+    error_message = JSONField(blank=True, default=dict)
+
+    def allow_create(self, user):
+        entity_obj = EntityUserAccess.objects.filter(
+            user=user,
+            entity=self.entity,
+            permissions__codename="create_center",
+        ).first()
+        return True if entity_obj else False
+
+    @property
+    def yet_to_apply_for_gstin(self):
+        return not self.gstin
+
+    @property
+    def factory_license_issuing_agency_display(self):
+        return (
+            self.factory_license_issuing_agency.name
+            if self.factory_license_issuing_agency
+            else "State Registration"  # ✅ default
+        )
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        validation_dict = {}
+        if (
+            self.start_date
+            and self.end_date
+            and self.start_date > self.end_date
+        ):
+            validation_dict[
+                "end_date"
+            ] = "The end date cannot be less than start date."
+        if (
+            self.factory_license_date
+            and self.factory_license_expiry_date
+            and self.factory_license_date > self.factory_license_expiry_date
+        ):
+            validation_dict[
+                "factory_license_expiry_date"
+            ] = "The expiry date cannot be less than license date."
+        if self.gstin and not self.gst_effective_date:
+            validation_dict["gst_effective_date"] = "This field is required."
+        if self.gst_effective_date and not self.gstin:
+            validation_dict["gstin"] = "This field is required."
+
+        if validation_dict:
+            raise ValidationError(validation_dict)
+
+    def save(self, **kwargs):
+        try:
+            if self.pk is None:
+                self.tally_mapping_name = self.name
+
+                #  Auto-generate short_name if missing
+                if not self.short_name:
+                    prefix = _prefix_from_name(self.entity.name)
+                    self.short_name = _next_running(Center, prefix, field="short_name")
+
+                # Default issuer if missing
+                if not self.factory_license_issuing_agency:
+                    self.factory_license_issuing_agency = DynamicEnum.objects.filter(
+                        enum=DynamicEnumType.FACTORY_LICENCE_ISSUING_AGENCY,
+                        name="State Registration",
+                    ).first()
+
+            if not self.code:
+                self.code = create_code("CNT", self.start_date)
+
+            super(Center, self).save(**kwargs)
+        except IntegrityError:
+            raise SerializerValidationError(
+                {
+                    "short_name": [
+                        ("Center with this short name already exists.")
+                    ]
+                }
+            )
+
+
+class CenterParticular(Particular):
+    center = ForeignKey(to="Center", on_delete=PROTECT)
 

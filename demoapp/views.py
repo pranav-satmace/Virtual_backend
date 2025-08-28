@@ -15,6 +15,8 @@ from .models import Tenant
 from .models import Entity
 from .serializers import EntitySerializer
 from .models import UserProfile
+from .models import Center, CenterParticular
+from .serializers import CenterSerializer, CenterParticularSerializer
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -100,3 +102,14 @@ class EntityViewSet(viewsets.ModelViewSet):
     queryset = Entity.objects.all()
     serializer_class = EntitySerializer
     permission_classes = [IsAuthenticated]
+
+
+
+class CenterViewSet(viewsets.ModelViewSet):
+    queryset = Center.objects.all()
+    serializer_class = CenterSerializer
+
+
+class CenterParticularViewSet(viewsets.ModelViewSet):
+    queryset = CenterParticular.objects.all()
+    serializer_class = CenterParticularSerializer

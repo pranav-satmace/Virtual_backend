@@ -4,6 +4,7 @@ from .models import UserProfile
 from .models import ReportingTenant
 from .models import Tenant
 from .models import Address, Currency, Entity
+from .models import Center, CenterParticular
 
 from phonenumber_field.serializerfields import PhoneNumberField
 from django_countries.serializer_fields import CountryField
@@ -213,3 +214,18 @@ class EntitySerializer(serializers.ModelSerializer):
         )
 
         return entity
+
+
+class CenterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Center
+        fields = "__all__"   # include all fields (you can also list specific ones)
+
+
+class CenterParticularSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CenterParticular
+        fields = "__all__"
+        read_only_fields = ["short_name", "is_archived", "is_active"]
+
+
