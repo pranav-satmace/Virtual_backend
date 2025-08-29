@@ -2,7 +2,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import UserViewSet, UserProfileViewSet, TenantSetupViewSet, EntityViewSet
-from .views import CenterViewSet, CenterParticularViewSet
+from .views import CenterViewSet
+from .views import WarehouseViewSet
+from .views import ItemViewSet
 
 router= DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -12,7 +14,12 @@ router.register(r'setup-tenant', TenantSetupViewSet, basename='setup-tenant')
 # router.register(r'currencies', CurrencyViewSet, basename='currency')
 router.register(r'entities', EntityViewSet, basename='entity')
 router.register(r'centers', CenterViewSet)
-router.register(r'center-particulars', CenterParticularViewSet)
+router.register(r'warehouses', WarehouseViewSet)
+router.register(r'items', ItemViewSet, basename='item')
+
+
+from .views import WarehouseViewSet
+
 urlpatterns = [ 
     # Classic CBV URL for users (GET + POST)
    # path("users/", UserListCreateView.as_view(), name="user-list-create"),

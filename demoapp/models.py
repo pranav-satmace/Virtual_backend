@@ -22,7 +22,10 @@ from django.db.models import (
     ImageField,
     JSONField,
     ManyToManyField,
+    UniqueConstraint,
+   
 )
+from django.db.models import Q
 
 
 from django.template import engines
@@ -77,10 +80,12 @@ from .utils import _prefix_from_name, _next_running
 from django.contrib.auth.models import Permission, Group
 #from .models import Collection
 from django.contrib.postgres.search import SearchVector
-from .taxonomies import DynamicEnumType
+from .taxonomies import DynamicEnumType,UnitCategory,  TaxType
 #from .taxonomies import DynamicEnum
 from django.db.utils import IntegrityError
 from typing import Collection
+from django.utils import timezone
+from datetime import timedelta
 
 from .custom_fields import (
     GSTField,
@@ -366,7 +371,7 @@ class Entity(ArchiveField, AbstractGenericEntityField):
 
     tenant = ForeignKey(
         Tenant, on_delete=PROTECT
-        #, limit_choices_to=limit_to_active
+        # , limit_choices_to=limit_to_active
     )
 
     
@@ -433,7 +438,8 @@ class DynamicEnum(CreateUpdateStatus):
 
 class Document(AbstractDocument):
     tenant = ForeignKey(
-        Tenant, on_delete=PROTECT, limit_choices_to=limit_to_active
+        Tenant, on_delete=PROTECT, 
+        # limit_choices_to=limit_to_active
     )
 
     def __str__(self):
@@ -443,8 +449,8 @@ class EntityUserAccess(models.Model):
     uid = UUIDField(default=uuid.uuid4)
     entity = ForeignKey(to=Entity, on_delete=PROTECT)
     user = ForeignKey(to=User, on_delete=PROTECT)
-    permissions = ManyToManyField(to=Permission, blank=True)
-    groups = ManyToManyField(to=Group, blank=True)
+   # permissions = ManyToManyField(to=Permission, blank=True)
+  #  groups = ManyToManyField(to=Group, blank=True)
 
     def __str__(self):
         return f"{self.user} / {self.entity}"
@@ -474,7 +480,10 @@ class EntityUserAccess(models.Model):
     def save(self, **kwargs):
         self.validate_unique(None)
         super(EntityUserAccess, self).save(**kwargs)
-    
+
+# def default_expiry_date():
+#     return (timezone.now() + timedelta(days=365*100)).date()
+
 class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
     # --- Old Meta (commented out) ---
     # class Meta:
@@ -503,8 +512,10 @@ class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
     name = CharField(max_length=255)
     short_name = UpperCharField(max_length=16)
     code = UpperCharField(max_length=32, blank=True)
-    start_date = DateField(default=timezone.now)
-    end_date = DateField(default=timezone.now)
+    #start_date = DateField(default=timezone.now)
+    start_date = models.DateField(default=timezone.localdate)
+    # end_date = DateField(default=timezone.now)
+    end_date = models.DateField(default=timezone.localdate)
     gst_effective_date = DateField(
         validators=[past_date_check], blank=True, null=True
     )
@@ -519,17 +530,14 @@ class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
 
     # --- Updated with defaults ---
     factory_license_number = CharField(max_length=255, blank=True, default="9999999999")
-    factory_license_date = DateField(
-        validators=[past_date_check],
-        default=timezone.now,
-    )
+    # factory_license_date = DateField(
+    #     validators=[past_date_check],
+    #     default=timezone.now,
+    # )
     # factory_license_expiry_date = DateField(
     #     default=lambda: timezone.now().date() + timedelta(days=365*100)
     # )
-
-    factory_license_expiry_date = DateField(
-    default=timezone.now().date() + timedelta(days=365*100)
-    )
+    factory_license_expiry_date = models.DateField( null=True, blank= True)
     entity = ForeignKey(to="Entity", on_delete=PROTECT)
     gst_certificates = ManyToManyField(to="Document", blank=True)
 #    processes = ManyToManyField(to="common.Process", blank=True)
@@ -542,9 +550,10 @@ class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
         blank=True,
         null=True,
     )
-    tally_mapping_name = CharField(max_length=255, blank=True, default="")
-    external_ids = JSONField(blank=True, default=dict)
-    error_message = JSONField(blank=True, default=dict)
+    licence_issuer= CharField(max_length=60, default="State Registration")
+    # tally_mapping_name = CharField(max_length=255, blank=True, default="")
+    # external_ids = JSONField(blank=True, default=dict)
+    # error_message = JSONField(blank=True, default=dict)
 
     def allow_create(self, user):
         entity_obj = EntityUserAccess.objects.filter(
@@ -626,6 +635,437 @@ class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
             )
 
 
-class CenterParticular(Particular):
-    center = ForeignKey(to="Center", on_delete=PROTECT)
+
+
+class Warehouse(CreateUpdateStatus, ArchiveField):
+    tenant = ForeignKey(
+        Tenant, on_delete=PROTECT
+        #, limit_choices_to=limit_to_active
+    )
+    center = models.ForeignKey("Center", on_delete=models.PROTECT, null=True, blank=True)
+
+    name = CharField(max_length=255, blank=True)
+    short_name = UpperCharField(max_length=16, blank=True)
+  #  prefix = CharField(max_length=8, blank=True)
+   # center = ForeignKey(to="Center", on_delete=PROTECT)
+   # tally_mapping_name = CharField(max_length=255, blank=True, default="")
+   # external_ids = JSONField(blank=True, default=dict)
+   # error_message = JSONField(blank=True, default=dict)
+
+    # def allow_create(self, user):
+    #     entity_obj = EntityUserAccess.objects.filter(
+    #         user=user,
+    #         entity=self.center.entity,
+    #         permissions__codename="create_warehouse",
+    #     ).first()
+    #     return True if entity_obj else False
+
+    class Meta:
+        unique_together = (("name", "tenant"),)
+        indexes = [
+            GinIndex(
+                SearchVector("name", config="english"),
+                name="warehouse_name_gin",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    # def save(self, **kwargs):
+    #     try:
+    #         if self.pk is None:
+    #             self.tally_mapping_name = self.name
+    #         super(Warehouse, self).save(**kwargs)
+    #     except IntegrityError:
+    #         raise SerializerValidationError(
+    #             {
+    #                 "short_name": "Warehouse with this short name already exists."
+    #             }
+    #         )
+    def save(self, **kwargs):
+        try:
+            if self.pk is None:
+                # --- Auto-set warehouse name from Center ---
+                if not self.name:
+                    self.name = self.center.name
+
+                # --- Auto-generate short_name from Center name ---
+                if not self.short_name:
+                    prefix = _prefix_from_name(self.center.name)
+                    self.short_name = _next_running(Warehouse, prefix, field="short_name")
+
+                self.tally_mapping_name = self.name
+
+            super(Warehouse, self).save(**kwargs)
+        except IntegrityError:
+            raise SerializerValidationError(
+                {"short_name": "Warehouse with this short name already exists."}
+            )   
+
+
+class UnitOfMeasurement(CreateUpdateStatus):
+    name = CharField(max_length=255)
+    unique_quantity_code = UpperCharField(max_length=3, unique=True)
+    conversion_rate = FloatField(
+        validators=[MinValueValidator(0.0)],
+        help_text="Conversion Rate to primary unit",
+    )
+    is_primary_unit = BooleanField(default=False)
+    category = CharField(choices=UnitCategory.choices, max_length=32)
+    tally_mapping_name = CharField(max_length=255, blank=True, default="")
+
+    @property
+    def category_display(self):
+        return self.get_category_display()
+
+    def __str__(self):
+        return f"{self.name} / {self.unique_quantity_code}"
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                "category",
+                condition=Q(is_primary_unit=True),
+                name="ensure_one_primary_true_for_category",
+            ),
+        ]
+
+    def clean(self):
+        if self.conversion_rate == 0:
+            raise ValidationError(
+                {"conversion_rate": "Conversion rate cannot be zero."}
+            )
+        if self.is_primary_unit and self.conversion_rate != 1:
+            raise ValidationError(
+                {
+                    "conversion_rate": "Conversion rate should be 1 for primary units."
+                }
+            )
+
+    def save(self, **kwargs):
+        if self.pk is None:
+            self.tally_mapping_name = self.unique_quantity_code
+        super(UnitOfMeasurement, self).save(**kwargs)
+
+
+class Tax(CreateUpdateStatus):
+    name = CharField(max_length=255)
+    rate = PercentField()
+    country = CharField(
+        max_length=2, choices=list(CountryField().choices), default="IN"
+    )
+    type = CharField(max_length=8, choices=TaxType.choices)
+    external_ids = JSONField(blank=True, default=dict)
+    tally_mapping_name = CharField(max_length=255, blank=True, default="")
+
+    def __str__(self):
+        return f"{self.name} / {self.rate}"
+
+    @property
+    def country_display(self):
+        return self.get_country_display()
+
+    @property
+    def type_display(self):
+        return self.get_type_display()
+
+    def save(self, **kwargs):
+        if self.pk is None:
+            self.tally_mapping_name = self.name
+        super(Tax, self).save(**kwargs)
+
+
+class TaxGroup(CreateUpdateStatus):
+    name = CharField(max_length=255)
+    taxes = ManyToManyField(to="Tax")
+    external_ids = JSONField(blank=True, default=dict)
+    tally_mapping_name = CharField(max_length=255, blank=True, default="")
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def tax_total(self):
+        return sum((tax.rate) for tax in self.taxes.all())
+
+    def save(self, **kwargs):
+        if self.pk is None:
+            self.tally_mapping_name = self.name
+        super(TaxGroup, self).save(**kwargs)
+
+
+
+class Item(CreateUpdateStatus, ArchiveField):
+     # Required Fields
+    name = CharField(max_length=255)
+    type = ForeignKey(
+        to="DynamicEnum",
+        on_delete=PROTECT,
+        limit_choices_to={"enum": DynamicEnumType.MATERIAL_TYPE},
+        related_name="type_item",
+    )# Item Type
+    image = ThumbnailerImageField(blank=True, null=True)
+    hsn_or_sac_code = CharField(max_length=8)
+    is_rcm_applicable = BooleanField(default=False)
+    is_epr_applicable = BooleanField(default=False)
+    unit = ForeignKey(
+        to="UnitOfMeasurement", on_delete=PROTECT, related_name="unit_item"
+    )  # UOM
+
+    inter_state_gst = ForeignKey(
+        to="TaxGroup", on_delete=PROTECT, related_name="inter_state_gst_item"
+    )
+    intra_state_gst = ForeignKey(
+        to="TaxGroup", on_delete=PROTECT, related_name="intra_state_gst_item"
+    )
+    intra_ut_gst = ForeignKey(
+        to="TaxGroup",
+        on_delete=PROTECT,
+        related_name="intra_ut_gst_item",
+        blank=True,
+        null=True,
+    )
+    tenant = ForeignKey(
+        Tenant, on_delete=PROTECT
+        # , limit_choices_to=limit_to_active
+    )
+    
+    # code = UpperCharField(max_length=32)
+    # description = TextField(blank=True)
+    # is_system_item = BooleanField(blank=True, default=False)
+    # invoice_sales_item_description = TextField(blank=True)
+    # consumable = BooleanField(default=False)
+    # purchasable = BooleanField(default=False)
+    # segregatable = BooleanField(default=False)
+    # qc_required = BooleanField(default=False)
+    # is_recycled = BooleanField(default=False)
+    # cc_item = ForeignKey(
+    #     to="CarbonCreditItem", on_delete=PROTECT, null=True, blank=True
+    # )
+    # ecommerce = BooleanField(default=False)
+    # saleable = BooleanField(default=False)
+    # packing_required = BooleanField(default=False)
+    
+    # tcs_percent = PercentField()
+    # unit_conversion_rate = FloatField(blank=True, null=True)
+    # sale_price = FloatField(default=0)
+    # sale_price_variance_percent = PercentField()
+    # prev_buy_price = FloatField(blank=True, null=True)
+    # buy_price = FloatField(default=0)
+    # buy_price_variance_percent = PercentField()
+    # min_order_quantity = FloatField(blank=True, null=True)
+    # max_order_quantity = FloatField(blank=True, null=True)
+    # reorder_quantity = FloatField(blank=True, null=True)
+    # lead_time_in_days = PositiveIntegerField(blank=True, null=True)
+    # quantity_variance_percent = PercentField(blank=True, null=True)
+    # party_reference_item_code = CharField(max_length=32, blank=True)
+    # is_recommended = BooleanField(default=False)
+    # quality_checked_date = DateField(blank=True, null=True)
+    # quality_rating = PositiveIntegerField(
+    #     default=0, validators=[MinValueValidator(0), MaxValueValidator(5)]
+    # )
+    # quality_remarks = TextField(blank=True)
+    
+    # level = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.ITEM_LEVEL},
+    #     related_name="level_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # storage_type = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.ITEM_STORAGE_TYPE},
+    #     related_name="storage_type_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # next_process = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.ITEM_NEXT_PROCESS},
+    #     related_name="next_process_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    
+    
+    # coa_sales = ForeignKey(
+    #     to="ChartOfAccount",
+    #     on_delete=PROTECT,
+    #     related_name="coa_sales_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # coa_purchase = ForeignKey(
+    #     to="ChartOfAccount",
+    #     on_delete=PROTECT,
+    #     related_name="coa_purchase_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # coa_inventory = ForeignKey(
+    #     to="ChartOfAccount",
+    #     on_delete=PROTECT,
+    #     related_name="coa_inventory_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    
+    # unit_category = CharField(choices=UnitCategory.choices, max_length=32)
+    # alternate_unit = ForeignKey(
+    #     to="UnitOfMeasurement",
+    #     on_delete=PROTECT,
+    #     related_name="alternate_unit_item",
+    #     blank=True,
+    #     null=True,
+    # )
+
+    # category = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.ITEM_CATEGORY},
+    #     related_name="category_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # item_sub_category = ForeignKey(
+    #     to="ItemSubCategory", on_delete=PROTECT, blank=True, null=True
+    # )
+    # quality_check_type = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.QC_TYPE},
+    #     related_name="quality_check_type_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # quality_checked_by = ForeignKey(
+    #     to=User, on_delete=PROTECT, blank=True, null=True
+    # )
+    # quality_checked_report_documents = ManyToManyField(
+    #     to="common.Document", blank=True
+    # )
+    
+    
+    # hsn_code = ForeignKey(
+    #     to="HarmonizedSystemName", on_delete=PROTECT, null=True
+    # )
+
+    # epr_type = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.EPR_TYPE},
+    #     related_name="epr_type_item",
+    #     blank=True,
+    #     null=True,
+    # )
+    # selection_count = PositiveIntegerField(default=0)
+    # external_ids = JSONField(blank=True, default=dict)
+    # tally_mapping_name = CharField(max_length=255, blank=True, default="")
+    # error_message = CharField(max_length=255, blank=True, default="")
+    # zoho_entity_error_message = JSONField(blank=True, default=dict)
+    # search_vector = SearchVectorField(blank=True, null=True)
+
+    class Meta:
+        unique_together = (
+            "name",
+            "tenant",
+        )
+        indexes = [
+            GinIndex(
+                SearchVector("name", config="english"),
+                name="search_vector_item_name",
+            )
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, **kwargs):
+        if not self.code:
+            self.code = create_code("ITM")
+        if not self.description:
+            self.description = self.name
+        if not self.alternate_unit:
+            self.unit_conversion_rate = 0
+        self.validate_unique(None)
+        super(Item, self).save(**kwargs)
+
+    # @property
+    # def segregated_quantity(self):
+    #     return SegregationOut.objects.filter(item=self).aggregate(
+    #         total_quantity=Sum("quantity", default=0)
+    #     ).get("total_quantity", 0) - Bale.objects.filter(
+    #         bale_set__item=self
+    #     ).aggregate(
+    #         total_quantity=Sum("quantity", default=0)
+    #     ).get(
+    #         "total_quantity", 0
+    #     )
+
+    @property
+    def type_display(self):
+        return self.type.name
+
+    @property
+    def unit_category_display(self):
+        return self.get_unit_category_display()
+
+    @property
+    def level_display(self):
+        return self.level.name
+
+    @property
+    def storage_type_display(self):
+        return self.storage_type.name
+
+    @property
+    def next_process_display(self):
+        return self.next_process.name
+
+    @property
+    def quality_check_type_display(self):
+        return self.quality_check_type.name
+
+    def validate_unique(self, exclude: Collection[str] | None = ...) -> None:
+        if self.pk is None:
+            qs = Item.objects.filter(
+                name=self.name,
+                tenant=self.tenant,
+            )
+            if qs.exists():
+                raise ValidationError(
+                    {"name": "An Item with the same name already exists"}
+                )
+        return super().validate_unique(exclude)
+
+    def clean(self):
+        if self.consumable and (
+            self.purchasable
+            or self.ecommerce
+            or self.saleable
+            or self.qc_required
+        ):
+            raise ValidationError(
+                {
+                    "consumable": "'Consumable' field cannot be true if any"
+                    " of the 'Purchasable' or 'E-commerce' or "
+                    "'Salable' or 'QC Required' is true"
+                }
+            )
+        if (
+            self.min_order_quantity
+            and self.max_order_quantity
+            and self.min_order_quantity > self.max_order_quantity
+        ):
+            raise ValidationError(
+                {
+                    "min_order_quantity": "Minimum Quantity cannot be less "
+                    "than Maximum Quantity."
+                }
+            )
 

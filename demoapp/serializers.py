@@ -4,7 +4,9 @@ from .models import UserProfile
 from .models import ReportingTenant
 from .models import Tenant
 from .models import Address, Currency, Entity
-from .models import Center, CenterParticular
+from .models import Center, Warehouse
+from datetime import datetime
+from .models import Item
 
 from phonenumber_field.serializerfields import PhoneNumberField
 from django_countries.serializer_fields import CountryField
@@ -130,7 +132,6 @@ class AddressSerializer(serializers.ModelSerializer):
     #         validated_data["places_api_json"] = {}
     #     return super().create(validated_data)
 
-
 class EntitySerializer(serializers.ModelSerializer):
     # registered_address = AddressSerializer(read_only=True)
     registered_address = AddressSerializer()
@@ -215,17 +216,54 @@ class EntitySerializer(serializers.ModelSerializer):
 
         return entity
 
-
 class CenterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Center
-        fields = "__all__"   # include all fields (you can also list specific ones)
-
-
-class CenterParticularSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CenterParticular
         fields = "__all__"
-        read_only_fields = ["short_name", "is_archived", "is_active"]
+        read_only_fields = ["short_name", "is_archived", "is_active", "code"]
 
 
+
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Warehouse
+        fields = ["id", "tenant", "center", "name", "short_name"]
+
+    # Optional: prevent passing name/short_name manually if you want auto
+    def create(self, validated_data):
+        return Warehouse.objects.create(**validated_data)
+
+
+
+class ItemSerializer(serializers.ModelSerializer):
+    # type_display = serializers.CharField(source='type.name', read_only=True)
+    # unit_display = serializers.CharField(source='unit.name', read_only=True)
+    # inter_state_gst_display = serializers.CharField(source='inter_state_gst.name', read_only=True)
+    # intra_state_gst_display = serializers.CharField(source='intra_state_gst.name', read_only=True)
+    # intra_ut_gst_display = serializers.CharField(source='intra_ut_gst.name', read_only=True)
+
+    class Meta:
+        model = Item
+        fields = "__all__"
+        # fields = [
+            # "id",
+            # "name",
+            # "type",
+            # "type_display",
+            # "image",
+            # "hsn_or_sac_code",
+            # "is_rcm_applicable",
+            # "is_epr_applicable",
+            # "unit",
+            # "unit_display",
+            # "inter_state_gst",
+            # "inter_state_gst_display",
+            # "intra_state_gst",
+            # "intra_state_gst_display",
+            # "intra_ut_gst",
+            # "intra_ut_gst_display",
+            # "created_at",
+            # "updated_at",
+            # "status",
+        # ]
