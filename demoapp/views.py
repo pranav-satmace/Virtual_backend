@@ -21,6 +21,8 @@ from .models import Warehouse
 from .serializers import WarehouseSerializer
 from .models import Item
 from .serializers import ItemSerializer
+from .models import TradePartner
+from .serializers import TradePartnerSerializer
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -126,7 +128,6 @@ class ItemViewSet(viewsets.ModelViewSet):
     serializer_class = ItemSerializer
     permission_classes = [IsAuthenticated]
 
-    # def get_queryset(self):
-    #     # Optional: filter by tenant if you have multi-tenant setup
-    #     user = self.request.user
-    #     return Item.objects.filter(tenant=user.tenant)
+class TradePartnerViewSet(viewsets.ModelViewSet):
+    queryset = TradePartner.objects.all()
+    serializer_class = TradePartnerSerializer

@@ -7,6 +7,7 @@ from .models import Address, Currency, Entity
 from .models import Center, Warehouse
 from datetime import datetime
 from .models import Item
+from .models import TradePartner, TradePartnerAddress, TradePartnerBankAccount
 
 from phonenumber_field.serializerfields import PhoneNumberField
 from django_countries.serializer_fields import CountryField
@@ -271,3 +272,104 @@ class ItemSerializer(serializers.ModelSerializer):
             # "updated_at",
             # "status",
         # ]
+
+
+class TradePartnerAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TradePartnerAddress
+        fields = [
+            "id",
+            "address_line",   # from AbstractAddress
+            "postal_code",
+            "city",
+            "state",
+            "country",
+            "latitude",
+            "longitude",
+            "gstin",
+            "gst_effective_date",
+            "is_billing",
+            "is_shipping",
+    #        "status",
+        ]
+
+
+class TradePartnerBankAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TradePartnerBankAccount
+        fields = [
+            "id",
+            "account_number",
+            "ifsc_code",      # from AbstractBankAccount
+            "bank_name",      # from AbstractBankAccount
+            "currency",
+            "account_type"
+#            "status",
+        ]
+
+
+class TradePartnerSerializer(serializers.ModelSerializer):
+    addresses = TradePartnerAddressSerializer(many=True, required=False)
+    bank_accounts = TradePartnerBankAccountSerializer(many=True, required=False)
+
+    class Meta:
+        model = TradePartner
+        fields =  [
+            "id",
+            "name",
+            "phone_number",
+            # "status",
+            "is_vendor",
+            "is_customer",
+            "display_picture",
+            "tax_number",
+            "tax_number_effective_date",
+            "transaction_currency",
+            "entity",
+            "addresses",
+            "bank_accounts",
+            "tenant",
+            #"short_name",
+        ]
+        # extra_kwargs = {
+        #     "short_name": {"required": False, "read_only": True},
+        # }
+        # # '__all__'
+
+        read_only_fields = ["short_name"]
+
+    def create(self, validated_data):
+        addresses_data = validated_data.pop("addresses", [])
+        bank_accounts_data = validated_data.pop("bank_accounts", [])
+        trade_partner = TradePartner.objects.create(**validated_data)
+
+        for addr in addresses_data:
+            TradePartnerAddress.objects.create(trade_partner=trade_partner, **addr)
+
+        for bank in bank_accounts_data:
+            TradePartnerBankAccount.objects.create(trade_partner=trade_partner, **bank)
+
+        return trade_partner
+
+    def update(self, instance, validated_data):
+        addresses_data = validated_data.pop("addresses", [])
+        bank_accounts_data = validated_data.pop("bank_accounts", [])
+
+        # update main fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # replace addresses
+        if addresses_data:
+            instance.tradepartneraddress_set.all().delete()
+            for addr in addresses_data:
+                TradePartnerAddress.objects.create(trade_partner=instance, **addr)
+
+        # replace bank accounts
+        if bank_accounts_data:
+            instance.tradepartnerbankaccount_set.all().delete()
+            for bank in bank_accounts_data:
+                TradePartnerBankAccount.objects.create(trade_partner=instance, **bank)
+
+        return instance

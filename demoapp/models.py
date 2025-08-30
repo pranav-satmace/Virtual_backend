@@ -7,6 +7,9 @@ from django.core.validators import (
     MinLengthValidator,
     MinValueValidator,
 )
+import random
+import string
+
 from django.db.models import (
     PROTECT,
     BooleanField,
@@ -23,11 +26,12 @@ from django.db.models import (
     JSONField,
     ManyToManyField,
     UniqueConstraint,
+    TextField,
    
 )
 from django.db.models import Q
-
-
+import functools
+import qrcode
 from django.template import engines
 from django.utils import timezone
 from django_countries.fields import CountryField
@@ -78,10 +82,8 @@ from .model_helpers import (
 
 from .utils import _prefix_from_name, _next_running
 from django.contrib.auth.models import Permission, Group
-#from .models import Collection
 from django.contrib.postgres.search import SearchVector
-from .taxonomies import DynamicEnumType,UnitCategory,  TaxType
-#from .taxonomies import DynamicEnum
+from .taxonomies import DynamicEnumType,UnitCategory,  TaxType,TradePartnerType, GSTTreatment
 from django.db.utils import IntegrityError
 from typing import Collection
 from django.utils import timezone
@@ -93,10 +95,6 @@ from .custom_fields import (
     PositiveFloatField,
     UpperCharField,
 )
-# External/internal helpers (replace with your logic or leave commented)
-# from common.communications import safe_send_email
-# from common.model_helpers import limit_to_active, random_pin
-# from common.taxonomies import DynamicEnumType, UserAccountType, UserLocale
 
 django_engine = engines["django"]
 
@@ -1069,3 +1067,334 @@ class Item(CreateUpdateStatus, ArchiveField):
                 }
             )
 
+
+
+class TradePartnerCategory(CreateUpdateStatus):
+    type = CharField(max_length=32, choices=TradePartnerType.choices)
+    category = CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.type} / {self.category}"
+
+    @property
+    def type_display(self):
+        return self.get_type_display()
+
+
+
+class TradePartnerEntity(CreateUpdateStatus):
+    trade_partner = ForeignKey("TradePartner", on_delete=PROTECT)
+    entity = ForeignKey(Entity, on_delete=PROTECT)
+    # customer_zoho_id = models.CharField(blank=True, null=True, max_length=255)
+    # vendor_zoho_id = models.CharField(blank=True, null=True, max_length=255)
+    # customer_address_zoho_id = models.CharField(
+    #     blank=True, null=True, max_length=255
+    # )
+    # vendor_address_zoho_id = models.CharField(
+    #     blank=True, null=True, max_length=255
+    # )
+
+    class Meta:
+        unique_together = (("trade_partner", "entity"),)
+
+    def __str__(self):
+        return f"{self.trade_partner} / {self.entity}"
+
+
+class TradePartner( CreateUpdateStatus, ArchiveField, AbstractGenericEntityField):
+    system_code = CharField(
+        max_length=16,
+        unique=True,
+        default=functools.partial(random_alphanum, 16, mix_case=True),
+    )
+    # is_related_party = BooleanField(default=False)
+    # is_registered = BooleanField(default=False)
+    is_customer = BooleanField(default=False)
+    is_vendor = BooleanField(default=True)
+    display_picture = ThumbnailerImageField(blank=True, null=True)
+ 
+    tenant = ForeignKey(
+        Tenant, on_delete=PROTECT
+        #, limit_choices_to=limit_to_active
+    )
+    # pan_number = CharField(max_length=20, blank=True)   
+    # pan_date = DateField(blank=True, null=True)         
+
+    # date_of_incorpotion = DateField(
+    #     help_text="Put date of birth if an Individual.", blank=True, null=True
+    # )
+    # referred_by = CharField(max_length=255, blank=True)
+    # referred_by_contact = CharField(max_length=255, blank=True)
+    # comment = TextField(blank=True)
+    # school = CharField(max_length=512, blank=True)
+    # field_of_study = CharField(max_length=512, blank=True)
+    # grade = CharField(max_length=512, blank=True)
+    # question_1 = TextField(
+    #     help_text="How does our commitment to responsible sourcing align with your values?",
+    #     blank=True,
+    # )
+    # question_2 = TextField(
+    #     help_text="What specific aspects of our sourcing approach do you appreciate the most?",
+    #     blank=True,
+    # )
+    # question_3 = TextField(
+    #     help_text="What are the areas where you think we could enhance our responsible sourcing efforts?",
+    #     blank=True,
+    # )
+    # question_4 = TextField(
+    #     help_text="Share any suggestions or ideas to further improve our sustainability practices.",
+    #     blank=True,
+    # )
+
+    # category = ForeignKey(
+    #     to="TradePartnerCategory", on_delete=PROTECT, blank=True, null=True
+    # )
+    # vendor_group = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.VENDOR_GROUP},
+    #     related_name="vendor_group_trade_partner",
+    #     blank=True,
+    #     null=True,
+    # )
+    # gender = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.GENDER},
+    #     related_name="gender_trade_partner",
+    #     blank=True,
+    #     null=True,
+    # )
+    # degree = ForeignKey(
+    #     to="DynamicEnum",
+    #     on_delete=PROTECT,
+    #     limit_choices_to={"enum": DynamicEnumType.DEGREE},
+    #     related_name="degree_trade_partner",
+    #     blank=True,
+    #     null=True,
+    # )
+    # kyc = OneToOneField(to="KYC", on_delete=PROTECT, blank=True, null=True)
+    # documents = ManyToManyField(
+    #     to="common.Document",
+    #     related_name="documents_trade_partner",
+    #     blank=True,
+    # )
+    transaction_currency = ForeignKey(to="Currency", on_delete=PROTECT)
+    entity = ForeignKey(
+        Entity,
+        on_delete=PROTECT,
+        #limit_choices_to=limit_to_active,
+        blank=True,
+        null=True,
+    )
+    # external_ids = JSONField(blank=True, default=dict)
+    # tally_mapping_name = CharField(max_length=255, blank=True, default="")
+    linked_entities = ManyToManyField(
+        Entity,
+        through="TradePartnerEntity",
+        blank=True,
+        related_name="linked_trade_partners",
+    )
+    # zoho_customer_error_message = JSONField(blank=True, default=dict)
+    # zoho_vendor_error_message = JSONField(blank=True, default=dict)
+
+    class Meta:
+        unique_together = (("short_name", "tenant"),)
+        indexes = [
+            GinIndex(
+                SearchVector("name", config="english"),
+                name="trade_partner_name_gin",
+            ),
+        ]
+        constraints = []   # remove extra unique constraint if any
+
+    # def allow_create(self, user):
+    #     entity_obj = EntityUserAccess.objects.filter(
+    #         user=user,
+    #         entity=self.entity,
+    #         permissions__codename="create_tradepartner",
+    #     ).first()
+    #     return True if entity_obj else False
+
+    # @property
+    # def address_gstin(self):
+    #     for address in self.tradepartneraddress_set.all():
+    #         if address.gstin:
+    #             return address.gstin
+    #     return "-"
+
+    # @property
+    # def vendor_group_display(self):
+    #     return self.vendor_group.name
+
+    # @property
+    # def gender_display(self):
+    #     return self.gender.name
+
+    # @property
+    # def degree_display(self):
+    #     return self.degree.name
+
+    def __str__(self):
+        return self.name
+
+    # def save(self, **kwargs):
+    #     if self.pk is None:
+    #         self.tally_mapping_name = self.name
+    #     super(TradePartner, self).save(**kwargs)
+
+    # def save(self, *args, **kwargs):
+    #     # Auto-generate short_name if not provided
+    #     if not self.short_name:
+    #         self.short_name = f"TP-{uuid.uuid4().hex[:6].upper()}"
+
+    #     # Auto-fill tally_mapping_name (if you keep that field)
+    #     if not getattr(self, "tally_mapping_name", None):
+    #         self.tally_mapping_name = self.name
+
+    #     super().save(*args, **kwargs)
+    
+    # def save(self, *args, **kwargs):
+    #     if not self.short_name:
+    #         # get first 4 letters of name (uppercase)
+    #         name_part = (self.name[:4].upper() if self.name else "TP")
+            
+    #         # generate 4-digit random number
+    #         random_part = "".join(random.choices(string.digits, k=4))
+            
+    #         # combine
+    #         self.short_name = f"{name_part}{random_part}"
+            
+    #         # ensure uniqueness
+    #         while TradePartner.objects.filter(short_name=self.short_name, tenant=self.tenant).exists():
+    #             random_part = "".join(random.choices(string.digits, k=4))
+    #             self.short_name = f"{name_part}{random_part}"
+
+    #     super().save(*args, **kwargs)
+    
+    def save(self, *args, **kwargs):
+        if not self.short_name:
+            name_part = (self.name[:4].upper() if self.name else "TP")
+            
+            # generate until unique
+            while True:
+                random_part = "".join(random.choices(string.digits, k=4))
+                short_name_candidate = f"{name_part}{random_part}"
+                if not TradePartner.objects.filter(
+                    short_name=short_name_candidate, tenant=self.tenant
+                ).exists():
+                    self.short_name = short_name_candidate
+                    break
+
+        super().save(*args, **kwargs)
+
+class TradePartnerAddress(CreateUpdateStatus, AbstractAddress):
+#    qr_code_image = ThumbnailerImageField(blank=True, null=True)
+    gst_effective_date = DateField(
+        validators=[past_date_check], blank=True, null=True
+    )
+    gstin = GSTField(verbose_name="GSTIN", blank=True)
+    # gst_certificates = ManyToManyField(
+    #     to="common.Document",
+    #     blank=True,
+    # )
+    trade_partner = ForeignKey(to="TradePartner", on_delete=PROTECT)
+    # qr_code = OneToOneField(
+    #     QRCode,
+    #     on_delete=PROTECT,
+    #     limit_choices_to=dict(inventory_type=QRCodeType.TPA),
+    # )
+    external_ids = JSONField(blank=True, default=dict)
+    gst_treatment = CharField(
+        max_length=32, blank=True, choices=GSTTreatment.choices
+    )
+    is_billing = BooleanField(default=False)
+    is_shipping = BooleanField(default=False)
+    # is_notify_copy = BooleanField(default=False)
+    # is_consignee = BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.address_line} / {self.trade_partner}"
+
+    # @property
+    # def type_display(self):
+    #     return self.get_type_display()
+
+    # @property
+    # def yet_to_apply_for_gstin(self):
+    #     return not self.gstin
+
+    # def allow_create(self, user):
+    #     entity_obj = EntityUserAccess.objects.filter(
+    #         user=user,
+    #         entity=self.trade_partner.entity,
+    #         permissions__codename="create_tradepartneraddress",
+    #     ).first()
+    #     return True if entity_obj else False
+
+    def save(self, **kwargs):
+        validation_dict = {}
+        if self.gstin and not self.gst_effective_date:
+            validation_dict["gst_effective_date"] = "This field is required."
+        if self.gst_effective_date and not self.gstin:
+            validation_dict["gstin"] = "This field is required."
+
+        if validation_dict:
+            raise SerializerValidationError(validation_dict)
+
+        # if not self.qr_code_id:
+        #     qr_code = QRCode(
+        #         inventory_type=QRCodeType.TPA,
+        #         tenant=self.trade_partner.tenant,
+        #     )
+        #     qr_code.save()
+        #     self.qr_code = qr_code
+        super(TradePartnerAddress, self).save(**kwargs)
+    
+class TradePartnerBankAccount(CreateUpdateStatus, AbstractBankAccount):
+    trade_partner = ForeignKey(
+        TradePartner, on_delete=PROTECT, limit_choices_to=limit_to_active
+    )
+    currency = ForeignKey(
+        to="Currency",
+        on_delete=PROTECT,
+        related_name="currency_trade_partner_bank_account",
+    )
+    # intermediate_bank_currency = ForeignKey(
+    #     to="Currency",
+    #     on_delete=PROTECT,
+    #     related_name="intermediate_bank_currency_trade_partner_bank_account",
+    #     blank=True,
+    #     null=True,
+    # )
+    # upi_currency = ForeignKey(
+    #     to="Currency",
+    #     on_delete=PROTECT,
+    #     related_name="upi_currency_trade_partner_bank_account",
+    #     blank=True,
+    #     null=True,
+    # )
+
+    # def allow_create(self, user):
+    #     entity_obj = EntityUserAccess.objects.filter(
+    #         user=user,
+    #         entity=self.trade_partner.entity,
+    #         permissions__codename="create_tradepartnerbankaccount",
+    #     ).first()
+    #     return True if entity_obj else False
+
+    # @property
+    # def account_type_display(self):
+    #     return self.account_type.name
+
+    def clean(self):
+        if self.currency and getattr(self.currency, "country", None) == "IN":
+            if not self.account_number or len(str(self.account_number)) != 16:
+                raise ValidationError(
+                    {
+                        "account_number": "Account number must be exactly 16 digits for Indian currency."
+                    }
+                )
+
+    def save(self, **kwargs):
+        super(TradePartnerBankAccount, self).save(**kwargs)

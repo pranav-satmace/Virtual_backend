@@ -2,16 +2,15 @@
 from django.contrib import admin
 from .models import UserProfile
 
-from .models import ReportingTenant
-from .models import Tenant
-from .models import Entity
-from .models import Center
-from .models import Warehouse
-
+from .models import ReportingTenant, Tenant, Entity,Center, Warehouse
+from .models import TradePartner, TradePartnerAddress, TradePartnerBankAccount
 admin.site.register(UserProfile)
 admin.site.register(Tenant)
 admin.site.register(ReportingTenant)
 admin.site.register(Warehouse)
+admin.site.register(TradePartner)
+admin.site.register(TradePartnerAddress)
+admin.site.register(TradePartnerBankAccount)
 # admin.site.register(Address)
 # admin.site.register(Currency)
 admin.site.register(Entity)
