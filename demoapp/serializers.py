@@ -168,7 +168,8 @@ class EntitySerializer(serializers.ModelSerializer):
             "bank_details",
             # "is_active",  # Fix: take from CreateUpdateStatus
         ]
-        read_only_fields = ["short_name", "is_archived"]
+
+        read_only_fields = ["short_name","tenant", "is_archived"]
 
     def create(self, validated_data):
         # Pop nested fields
@@ -246,6 +247,9 @@ class ItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Item
         fields = "__all__"
+        extra_kwargs = {
+            "code": {"read_only": True}
+        }
         # fields = [
             # "id",
             # "name",

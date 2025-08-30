@@ -370,7 +370,7 @@ class Entity(ArchiveField, AbstractGenericEntityField):
 
 
     tenant = ForeignKey(
-        Tenant, on_delete=PROTECT
+        Tenant, on_delete=PROTECT, blank=True, null=True
         # , limit_choices_to=limit_to_active
     )
 
@@ -831,7 +831,7 @@ class Item(CreateUpdateStatus, ArchiveField):
         # , limit_choices_to=limit_to_active
     )
     
-    # code = UpperCharField(max_length=32)
+    code = UpperCharField(max_length=32, unique=True, blank=True, null=True)
     # description = TextField(blank=True)
     # is_system_item = BooleanField(blank=True, default=False)
     # invoice_sales_item_description = TextField(blank=True)
@@ -988,10 +988,10 @@ class Item(CreateUpdateStatus, ArchiveField):
     def save(self, **kwargs):
         if not self.code:
             self.code = create_code("ITM")
-        if not self.description:
-            self.description = self.name
-        if not self.alternate_unit:
-            self.unit_conversion_rate = 0
+        # if not self.description:
+        #     self.description = self.name
+        # if not self.alternate_unit:
+        #     self.unit_conversion_rate = 0
         self.validate_unique(None)
         super(Item, self).save(**kwargs)
 
