@@ -8,9 +8,11 @@ from .models import Center, Warehouse
 from datetime import datetime
 from .models import Item
 from .models import TradePartner, TradePartnerAddress, TradePartnerBankAccount
+from .models import GoodsReceiptNote, GrnLineItem, Packaging, Vehicle, Driver, SerialMaster, Counter
 
 from phonenumber_field.serializerfields import PhoneNumberField
 from django_countries.serializer_fields import CountryField
+from django.utils.timezone import now
 
 from .utils import _prefix_from_name, _next_running  
 
@@ -373,3 +375,79 @@ class TradePartnerSerializer(serializers.ModelSerializer):
                 TradePartnerBankAccount.objects.create(trade_partner=instance, **bank)
 
         return instance
+
+
+class GoodsReceiptNoteSerializer(serializers.ModelSerializer):
+    trade_partner_name = serializers.CharField(source="trade_partner.name", read_only=True)
+    billing_address_text = serializers.CharField(source="billing_address.address_line", read_only=True)
+    shipping_address_text = serializers.CharField(source="shipping_address.address_line", read_only=True)
+    grn_number = serializers.CharField(required=False, allow_blank=True)
+    prefixed_grn_number = serializers.CharField(required=False, allow_blank=True)
+    grn_date = serializers.DateField(required=False)
+
+    class Meta:
+        model = GoodsReceiptNote
+        fields = [
+       #     "id",
+            "grn_number",                 
+            "prefixed_grn_number",        
+            "grn_date",                   # GRN Date
+            "trade_partner",              # FK
+            "trade_partner_name",         # Human-readable
+            "billing_address",
+            "billing_address_text",
+            "shipping_address",
+            "shipping_address_text",
+            "warehouse",
+            "status",
+            "tenant",
+            "transaction_currency"
+           
+        ]
+
+    def validate_grn_date(self, value):
+        """GRN Date cannot be in future"""
+        from django.utils.timezone import now
+        if value > now().date():
+            raise serializers.ValidationError("GRN Date cannot be in the future.")
+        return value
+
+    def create(self, validated_data):
+        # """Automatically assign tenant from request user"""
+        # request = self.context.get("request")
+        # if request and hasattr(request.user, "tenant"):
+        #     validated_data["tenant"] = request.user.tenant
+        # else:
+        #     raise serializers.ValidationError("Tenant is required.")
+        return GoodsReceiptNote.objects.create(**validated_data)
+
+
+class GrnLineItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    source_name = serializers.CharField(source="source.name", read_only=True)
+
+    class Meta:
+        model = GrnLineItem
+        fields = [
+            "id",
+            "goods_receipt_note",  # FK to GRN Header
+            "item",
+            "item_name",
+            "quantity",            # Item Quantity
+            "rate",                # Item Value
+            "documents",           # Material Photos
+            "source",              # Material Source (DynamicEnum)
+            "source_name",
+            
+        ]
+
+    # def create(self, validated_data):
+    #     line_item = GrnLineItem.objects.create(**validated_data)
+    #     return line_item
+
+    def create(self, validated_data):
+        documents = validated_data.pop("documents", [])
+        line_item = GrnLineItem.objects.create(**validated_data)
+        if documents:
+            line_item.documents.set(documents)
+        return line_item

@@ -6,6 +6,7 @@ from .views import CenterViewSet
 from .views import WarehouseViewSet
 from .views import ItemViewSet
 from .views import TradePartnerViewSet
+from .views import GoodsReceiptNoteViewSet, GrnLineItemViewSet
 
 router= DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -18,6 +19,8 @@ router.register(r'centers', CenterViewSet)
 router.register(r'warehouses', WarehouseViewSet)
 router.register(r'items', ItemViewSet, basename='item')
 router.register(r"trade-partners", TradePartnerViewSet, basename="trade-partner")
+router.register(r"grn-header", GoodsReceiptNoteViewSet, basename="grn-header")
+router.register(r"grn-detail", GrnLineItemViewSet, basename="grn-detail")
 
 
 from .views import WarehouseViewSet
