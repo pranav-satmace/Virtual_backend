@@ -5,7 +5,7 @@ from .views import UserViewSet, UserProfileViewSet, TenantSetupViewSet, EntityVi
 from .views import CenterViewSet
 from .views import WarehouseViewSet
 from .views import ItemViewSet
-from .views import TradePartnerViewSet
+from .views import TradePartnerViewSet, DispatchOrderViewSet
 from .views import GoodsReceiptNoteViewSet, GrnLineItemViewSet
 
 router= DefaultRouter()
@@ -21,6 +21,7 @@ router.register(r'items', ItemViewSet, basename='item')
 router.register(r"trade-partners", TradePartnerViewSet, basename="trade-partner")
 router.register(r"grn-header", GoodsReceiptNoteViewSet, basename="grn-header")
 router.register(r"grn-detail", GrnLineItemViewSet, basename="grn-detail")
+router.register(r"dispatch-order", DispatchOrderViewSet, basename="dispatch-order")
 
 
 from .views import WarehouseViewSet

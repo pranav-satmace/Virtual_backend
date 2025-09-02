@@ -21,8 +21,8 @@ from .models import Warehouse
 from .serializers import WarehouseSerializer
 from .models import Item
 from .serializers import ItemSerializer
-from .models import TradePartner, GoodsReceiptNote, GrnLineItem
-from .serializers import TradePartnerSerializer, GoodsReceiptNoteSerializer, GrnLineItemSerializer
+from .models import TradePartner, GoodsReceiptNote, GrnLineItem, DispatchOrder
+from .serializers import TradePartnerSerializer, GoodsReceiptNoteSerializer, GrnLineItemSerializer, DispatchOrderSerializer
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -131,16 +131,23 @@ class ItemViewSet(viewsets.ModelViewSet):
 class TradePartnerViewSet(viewsets.ModelViewSet):
     queryset = TradePartner.objects.all()
     serializer_class = TradePartnerSerializer
-
-
+    permission_classes = [IsAuthenticated]
 
 # Goods Receipt Note (Header)
 class GoodsReceiptNoteViewSet(viewsets.ModelViewSet):
     queryset = GoodsReceiptNote.objects.all().order_by("-grn_date")
     serializer_class = GoodsReceiptNoteSerializer
+    permission_classes = [IsAuthenticated]
 
 
 # Grn Line Item (Detail)
 class GrnLineItemViewSet(viewsets.ModelViewSet):
     queryset = GrnLineItem.objects.all()
     serializer_class = GrnLineItemSerializer
+    permission_classes = [IsAuthenticated]
+
+class DispatchOrderViewSet(viewsets.ModelViewSet):
+    queryset = DispatchOrder.objects.all().order_by("-dispatch_date")
+    serializer_class = DispatchOrderSerializer
+    permission_classes = [IsAuthenticated]
+

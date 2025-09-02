@@ -8,7 +8,7 @@ from .models import Center, Warehouse
 from datetime import datetime
 from .models import Item
 from .models import TradePartner, TradePartnerAddress, TradePartnerBankAccount
-from .models import GoodsReceiptNote, GrnLineItem, Packaging, Vehicle, Driver, SerialMaster, Counter
+from .models import GoodsReceiptNote, GrnLineItem, Packaging, Vehicle, Driver, SerialMaster, Counter,DispatchOrder
 
 from phonenumber_field.serializerfields import PhoneNumberField
 from django_countries.serializer_fields import CountryField
@@ -56,7 +56,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'uid', 'tenant', 'user', 'country', 'account_type',
             'phone_number', 'whatsapp_number', 'profile_picture',
-            'signature', 'gender', 'department', 'designation', 'locale'
+            'signature', 'gender',
+            'department', 'designation', 'locale'
         ]
 
     # Create nested user + profile
@@ -451,3 +452,29 @@ class GrnLineItemSerializer(serializers.ModelSerializer):
         if documents:
             line_item.documents.set(documents)
         return line_item
+
+
+class DispatchOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model= DispatchOrder
+        fields= [
+            "id",
+            "dispatch_number",
+            "prefixed_dispatch_number",
+            "dispatch_date",
+            "tenant",
+            "warehouse",
+            "trade_partner",
+            "billing_address",
+            "shipping_address",
+            "dispatch_mode",
+          
+        ]
+    def validate_dispatch_date(self, value):
+        """Dispatch Date cannot be in future"""
+        from django.utils.timezone import now
+        if value > now().date():
+            raise serializers.ValidationError("Dispatch  Date cannot be in the future.")
+        return value
+    def create(self, validated_data):
+        return DispatchOrder.objects.create(**validated_data)

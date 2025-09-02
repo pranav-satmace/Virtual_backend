@@ -112,6 +112,7 @@ from .taxonomies import (
     TermType,
     DispatchMode,
     IncoTerm,
+    UserLocale,
     )
 from django.db.utils import IntegrityError
 from typing import Collection
@@ -128,16 +129,75 @@ from .custom_fields import (
 django_engine = engines["django"]
 
 
+# If Entity model is in this file:
+# from .models import Entity
+class ReportingTenant(Model):
+    """
+    Auto-created from Entity.
+    - Name: auto = Entity.name
+    - Status: 'Active'
+    - Short Code: first 3 of Entity.name + running 3 digits (e.g., ABC001)
+    One-to-one with Entity (one reporting-tenant per entity).
+    """
+ #   entity = OneToOneField('Entity', on_delete=CASCADE, related_name='reporting_tenant')
+    name = CharField(max_length=255)
+    status = CharField(max_length=20, default='Active')
+    short_code = CharField(max_length=6, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Tenant(Model):
+    """
+    Auto-created alongside ReportingTenant.
+    - Name: auto = Entity.name
+    - Status: 'Active'
+    - Short Code: first 3 of Entity.name + running 3 digits (independent series)
+    Many tenants can exist under a ReportingTenant if you ever need to expand.
+    """
+    reporting_tenant = ForeignKey(ReportingTenant, on_delete= PROTECT, related_name='tenants')
+    name = CharField(max_length=255)
+    status = CharField(max_length=20, default='Active')
+    short_code = CharField(max_length=6, unique=True)
+
+    def __str__(self):
+        return self.name
+
+# Creating reporting tenant and tenant with Entinty
+# @receiver(post_save, sender='yourapp.Entity')  # ← replace 'yourapp' with your Django app label
+# def create_reporting_and_tenant(sender, instance, created, **kwargs):
+#     if not created:
+#         return
+#     prefix = _prefix_from_name(instance.name)
+
+#     # Reporting Tenant
+#     rt = ReportingTenant.objects.create(
+#         entity=instance,
+#         name=instance.name,
+#         status='Active',
+#         short_code=_next_running(ReportingTenant, prefix),
+#     )
+
+#     # Default Tenant under the Reporting Tenant
+#     Tenant.objects.create(
+#         reporting_tenant=rt,
+#         name=instance.name,
+#         status='Active',
+#         short_code=_next_running(Tenant, prefix),
+#     )
+
+
 # Simplified enums
 class UserAccountType:
     USER_ACCOUNT = "user"
     ADMIN_ACCOUNT = "admin"
     choices = [(USER_ACCOUNT, "User"), (ADMIN_ACCOUNT, "Admin")]
 
-class UserLocale:
-    EN_IN = "en_IN"
-    EN_US = "en_US"
-    choices = [(EN_IN, "English (India)"), (EN_US, "English (US)")]
+# class UserLocale:
+#     EN_IN = "en_IN"
+#     EN_US = "en_US"
+#     choices = [(EN_IN, "English (India)"), (EN_US, "English (US)")]
 
 
 # Create your models here.
@@ -145,7 +205,9 @@ class UserLocale:
 class UserProfile(Model):
     
     uid = UUIDField(default=uuid.uuid4, unique=True)
-    tenant = CharField(max_length=255)
+    tenant = ForeignKey(Tenant, on_delete=PROTECT
+        #, limit_choices_to=limit_to_active
+    )
     user = OneToOneField(to=User, on_delete=PROTECT)
     country = CharField(max_length=2, choices=list(CountryField().choices), default="IN")
     account_type = CharField(max_length=32, choices=UserAccountType.choices, default=UserAccountType.USER_ACCOUNT)
@@ -273,68 +335,6 @@ class UserProfile(Model):
 
 
 
-
-
-# If Entity model is in this file:
-# from .models import Entity
-class ReportingTenant(Model):
-    """
-    Auto-created from Entity.
-    - Name: auto = Entity.name
-    - Status: 'Active'
-    - Short Code: first 3 of Entity.name + running 3 digits (e.g., ABC001)
-    One-to-one with Entity (one reporting-tenant per entity).
-    """
- #   entity = OneToOneField('Entity', on_delete=CASCADE, related_name='reporting_tenant')
-    name = CharField(max_length=255)
-    status = CharField(max_length=20, default='Active')
-    short_code = CharField(max_length=6, unique=True)
-
-    def __str__(self):
-        return self.name
-
-
-class Tenant(Model):
-    """
-    Auto-created alongside ReportingTenant.
-    - Name: auto = Entity.name
-    - Status: 'Active'
-    - Short Code: first 3 of Entity.name + running 3 digits (independent series)
-    Many tenants can exist under a ReportingTenant if you ever need to expand.
-    """
-    reporting_tenant = ForeignKey(ReportingTenant, on_delete= PROTECT, related_name='tenants')
-    name = CharField(max_length=255)
-    status = CharField(max_length=20, default='Active')
-    short_code = CharField(max_length=6, unique=True)
-
-    def __str__(self):
-        return self.name
-
-
-
-
-# Creating reporting tenant and tenant with Entinty
-# @receiver(post_save, sender='yourapp.Entity')  # ← replace 'yourapp' with your Django app label
-# def create_reporting_and_tenant(sender, instance, created, **kwargs):
-#     if not created:
-#         return
-#     prefix = _prefix_from_name(instance.name)
-
-#     # Reporting Tenant
-#     rt = ReportingTenant.objects.create(
-#         entity=instance,
-#         name=instance.name,
-#         status='Active',
-#         short_code=_next_running(ReportingTenant, prefix),
-#     )
-
-#     # Default Tenant under the Reporting Tenant
-#     Tenant.objects.create(
-#         reporting_tenant=rt,
-#         name=instance.name,
-#         status='Active',
-#         short_code=_next_running(Tenant, prefix),
-#     )
 
 
 # class Address(CreateUpdateStatus, AbstractAddress, ArchiveField):
@@ -1173,7 +1173,6 @@ class TradePartner( CreateUpdateStatus, ArchiveField, AbstractGenericEntityField
     #     help_text="Share any suggestions or ideas to further improve our sustainability practices.",
     #     blank=True,
     # )
-
     # category = ForeignKey(
     #     to="TradePartnerCategory", on_delete=PROTECT, blank=True, null=True
     # )
@@ -1453,24 +1452,40 @@ class Counter(CreateUpdate):
     document_type = CharField(max_length=32, choices=DocumentType.choices)
     counter = BigIntegerField(default=0)
 
+    # def generate_suffix(self):
+    #     tenant_id = self.tenant.id
+    #     with transaction.atomic():
+    #         # Get the current value of the counter for this tenant
+    #         cursor = connection.cursor()
+    #         cursor.execute(
+    #             """
+    #             UPDATE common_counter
+    #             SET counter = counter + 1
+    #             WHERE tenant_id = %s
+    #             AND document_type = %s
+    #             RETURNING counter
+    #         """,
+    #             [tenant_id, self.document_type],
+    #         )
+    #         serial_number = cursor.fetchone()[0]
+    #         return serial_number
     def generate_suffix(self):
         tenant_id = self.tenant.id
+        table = self._meta.db_table  # dynamically gets the real table name
         with transaction.atomic():
-            # Get the current value of the counter for this tenant
             cursor = connection.cursor()
             cursor.execute(
-                """
-                UPDATE common_counter
+                f"""
+                UPDATE {table}
                 SET counter = counter + 1
                 WHERE tenant_id = %s
                 AND document_type = %s
                 RETURNING counter
-            """,
+                """,
                 [tenant_id, self.document_type],
             )
             serial_number = cursor.fetchone()[0]
             return serial_number
-
 
 class Packaging(CreateUpdateStatus, ArchiveField):
     name = CharField(max_length=128, blank=True)
@@ -2962,10 +2977,12 @@ class DispatchOrder(CreateUpdate, ArchiveField, ApprovalField):
     dispatch_date = DateField()
     is_external = BooleanField(default=False)
     tenant = ForeignKey(
-        Tenant, on_delete=PROTECT, limit_choices_to=limit_to_active
+        Tenant, on_delete=PROTECT
+        #, limit_choices_to=limit_to_active
     )
     warehouse = ForeignKey(
-        to="Warehouse", on_delete=PROTECT, limit_choices_to=limit_to_active
+        to="Warehouse", on_delete=PROTECT
+        #, limit_choices_to=limit_to_active
     )
     trade_partner = ForeignKey(
         to="TradePartner",
@@ -3335,44 +3352,82 @@ class DispatchOrder(CreateUpdate, ArchiveField, ApprovalField):
                     }
                 )
 
+    # def save(self, **kwargs):
+    #     with transaction.atomic():
+    #         if not self.dispatch_date:
+    #             self.dispatch_date = timezone_date()
+    #         if not self.prefixed_dispatch_number:
+    #             with transaction.atomic():
+    #                 entity: Entity = self.warehouse.center.entity
+    #                 serial_master = SerialMaster.objects.filter(
+    #                     entity=entity,
+    #                     document_type=DocumentType.DISPATCH_ORDER,
+    #                 ).first()
+    #                 prefix = (
+    #                     ""
+    #                     if not serial_master
+    #                     else serial_master.generate_prefix(self.dispatch_date)
+    #                 )
+    #                 counter: Counter = Counter.objects.filter(
+    #                     tenant=self.tenant,
+    #                     document_type=DocumentType.DISPATCH_ORDER,
+    #                 ).first()
+    #                 if not counter:
+    #                     raise ValueError(
+    #                         "Counter instance doesn't exist. Fix this"
+    #                     )
+    #                 suffix = counter.generate_suffix()
+    #                 self.prefixed_dispatch_number = (
+    #                     f"{prefix}-{suffix}" if prefix else suffix
+    #                 )
+    #         # legacy QR / code generation removed (qr_code field unused)
+    #         if sales_order := self.sales_order:
+    #             self.sales_order_number = sales_order.sales_order_number
+    #             self.sales_order_date = sales_order.sales_order_date
+    #             self.trade_partner_order_number = (
+    #                 sales_order.trade_partner_order_number
+    #             )
+    #             self.trade_partner_order_date = (
+    #                 sales_order.trade_partner_order_date
+    #             )
+    #         self.full_clean()
+    #         super(DispatchOrder, self).save(**kwargs)
+
     def save(self, **kwargs):
         with transaction.atomic():
             if not self.dispatch_date:
                 self.dispatch_date = timezone_date()
+            
             if not self.prefixed_dispatch_number:
-                with transaction.atomic():
-                    entity: Entity = self.warehouse.center.entity
-                    serial_master = SerialMaster.objects.filter(
-                        entity=entity,
-                        document_type=DocumentType.DISPATCH_ORDER,
-                    ).first()
-                    prefix = (
-                        ""
-                        if not serial_master
-                        else serial_master.generate_prefix(self.dispatch_date)
+                entity: Entity = self.warehouse.center.entity
+                serial_master = SerialMaster.objects.filter(
+                    entity=entity,
+                    document_type=DocumentType.DISPATCH_ORDER,
+                ).first()
+                prefix = (
+                    ""
+                    if not serial_master
+                    else serial_master.generate_prefix(self.dispatch_date)
                     )
-                    counter: Counter = Counter.objects.filter(
-                        tenant=self.tenant,
-                        document_type=DocumentType.DISPATCH_ORDER,
-                    ).first()
-                    if not counter:
-                        raise ValueError(
-                            "Counter instance doesn't exist. Fix this"
-                        )
-                    suffix = counter.generate_suffix()
-                    self.prefixed_dispatch_number = (
-                        f"{prefix}-{suffix}" if prefix else suffix
+                counter, created = Counter.objects.get_or_create(
+                    tenant=self.tenant,
+                    document_type=DocumentType.DISPATCH_ORDER,
+                    defaults={"counter": 0},  # 👈 adjust to match your Counter fields
                     )
-            # legacy QR / code generation removed (qr_code field unused)
+                suffix = counter.generate_suffix()
+                self.prefixed_dispatch_number = (
+                    f"{prefix}-{suffix}" if prefix else suffix
+                    )
+
             if sales_order := self.sales_order:
                 self.sales_order_number = sales_order.sales_order_number
                 self.sales_order_date = sales_order.sales_order_date
                 self.trade_partner_order_number = (
                     sales_order.trade_partner_order_number
-                )
+                    )
                 self.trade_partner_order_date = (
                     sales_order.trade_partner_order_date
-                )
+                    )
             self.full_clean()
             super(DispatchOrder, self).save(**kwargs)
 
