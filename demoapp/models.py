@@ -199,15 +199,20 @@ class UserAccountType:
 #     EN_US = "en_US"
 #     choices = [(EN_IN, "English (India)"), (EN_US, "English (US)")]
 
+def random_pin():
+    return random.randint(100000, 999999)
+
 
 # Create your models here.
 
 class UserProfile(Model):
     
     uid = UUIDField(default=uuid.uuid4, unique=True)
-    tenant = ForeignKey(Tenant, on_delete=PROTECT
-        #, limit_choices_to=limit_to_active
-    )
+    # tenant = ForeignKey(Tenant, on_delete=PROTECT
+    #     #, limit_choices_to=limit_to_active
+    # )
+    tenant = models.ForeignKey("Tenant", on_delete=models.PROTECT, null=True, blank=True)  # now optional
+
     user = OneToOneField(to=User, on_delete=PROTECT)
     country = CharField(max_length=2, choices=list(CountryField().choices), default="IN")
     account_type = CharField(max_length=32, choices=UserAccountType.choices, default=UserAccountType.USER_ACCOUNT)
@@ -250,9 +255,11 @@ class UserProfile(Model):
         max_length=32, choices=UserLocale.choices, default=UserLocale.EN_IN
     )
     # Email OTP related fields (uncomment if you implement)
-    # email_otp = PositiveIntegerField(validators=[MaxValueValidator(999999), MinValueValidator(100000)], default=random_pin)
-    # email_otp_sent = DateTimeField(null=True, blank=True)
-    # email_verified = BooleanField(default=False)
+    email_otp = PositiveIntegerField(
+        validators=[MaxValueValidator(999999), MinValueValidator(100000)], 
+        default=random_pin, null=True, blank=True)
+    email_otp_sent = DateTimeField(null=True, blank=True)
+    email_verified = BooleanField(default=False)
 
     def __str__(self):
         return f"{self.user}"
@@ -284,6 +291,26 @@ class UserProfile(Model):
     @property
     def designation_display(self):
         return self.designation  # or just return self.designation directly
+
+    def generate_email_otp(self):
+        self.email_otp = random_pin()
+        self.email_otp_sent = timezone.now()
+        self.save(update_fields=['email_otp', 'email_otp_sent'])
+
+    def verify_email_otp(self, otp: str) -> bool:
+        if not self.email_otp_sent:
+            return False
+        expiry_time = self.email_otp_sent + timedelta(minutes=10)
+        if timezone.now() > expiry_time:
+            return False
+        if str(self.email_otp) == str(otp):
+            self.email_verified = True
+            self.email_otp = None
+            self.save(update_fields=['email_verified', 'email_otp'])
+            return True
+        return False
+
+    
 
     # def request_password_reset(self):
     #     now = timezone.now()

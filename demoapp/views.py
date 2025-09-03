@@ -29,11 +29,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
+   # queryset = User.objects.all()
     serializer_class = UserSerializer
     # permission_classes = [permissions.IsAuthenticated]
     permission_classes = [IsAuthenticated]
-
+    def get_queryset(self):
+        # only return the logged-in user
+        return User.objects.filter(id=self.request.user.id)
+    
 class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer

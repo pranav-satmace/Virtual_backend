@@ -1,4 +1,5 @@
 import re
+from django.core.mail import send_mail
 
 # --- Helpers + signals to auto-create and auto-assign short codes for teneant and reporting tenant ---
 
@@ -23,3 +24,9 @@ def _next_running(model, prefix: str, field: str = "short_code") -> str:
     last = model.objects.filter(**filter_kwargs).order_by(f"-{field}").first()
     n = int(getattr(last, field)[-3:]) + 1 if last else 1
     return f"{prefix}{n:03d}"
+
+
+def send_email_otp(to_email: str, code: int):
+    subject = 'Your Virtual IO verification code'
+    message = f'Your verification code is: {code}\nIt expires in 10 minutes.'
+    send_mail(subject, message, None, [to_email], fail_silently=False)

@@ -7,6 +7,8 @@ from .views import WarehouseViewSet
 from .views import ItemViewSet
 from .views import TradePartnerViewSet, DispatchOrderViewSet
 from .views import GoodsReceiptNoteViewSet, GrnLineItemViewSet
+from .views_auth import RegisterWithEmailView, VerifyEmailOTPView, PatchedTokenObtainPairView, LogoutView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 router= DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -32,4 +34,12 @@ urlpatterns = [
 
     # Router URLs for UserProfile (list, create, retrieve, update, delete)
     path('', include(router.urls)),
+
+    # 🔐 Auth endpoints
+    path('api/auth/register/', RegisterWithEmailView.as_view(), name='register'),
+    path('api/auth/verify-email/', VerifyEmailOTPView.as_view(), name='verify-email'),
+    path('api/auth/token/', PatchedTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
+
 ]

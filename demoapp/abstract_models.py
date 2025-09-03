@@ -190,8 +190,8 @@ class AbstractBankAccount(Model):
 
 class AbstractAddress(Model):
     address_line = TextField()
-    latitude = FloatField()
-    longitude = FloatField()
+    latitude = FloatField(blank=True)
+    longitude = FloatField(blank=True)
     postal_code = IntegerField(blank=True, null=True)
     city = CharField(max_length=255, blank=True)
     state = CharField(max_length=255, blank=True)
