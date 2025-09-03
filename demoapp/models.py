@@ -2245,7 +2245,8 @@ class GrnLineItem(
         null=True,
     )
     goods_receipt_note = ForeignKey(to="GoodsReceiptNote", on_delete=PROTECT)
-    documents = ManyToManyField(to="Document", blank=True, null=True)
+    documents = ManyToManyField(to="Document", blank=True )
+    #, null=True)
     unit = ForeignKey(
         to="UnitOfMeasurement", on_delete=PROTECT, blank=True, null=True
     )
