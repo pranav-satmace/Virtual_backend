@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-from rest_framework_simplejwt.views import TokenViewBase
+from rest_framework_simplejwt.views import TokenViewBase, TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import serializers
@@ -41,10 +41,40 @@ class PatchedTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['email'] = user.email
         return token
 
+# class PatchedTokenObtainPairView(TokenViewBase):
+#     permission_classes = [AllowAny]
+#     serializer_class = PatchedTokenObtainPairSerializer
 class PatchedTokenObtainPairView(TokenViewBase):
     permission_classes = [AllowAny]
     serializer_class = PatchedTokenObtainPairSerializer
 
+    # 🔄 reorder tokens in response
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            data = response.data
+            response.data = {
+                "access": data.get("access"),
+                "refresh": data.get("refresh"),
+            }
+        return response
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    permission_classes = [AllowAny]
+
+    # 🔄 reorder tokens in response
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            data = response.data
+            response.data = {
+                "access": data.get("access"),
+                "refresh": request.data.get("refresh"),  # keep refresh in output too
+            }
+        return response
+    
+    
 class LogoutView(APIView):
     def post(self, request):
         try:
