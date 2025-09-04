@@ -7,32 +7,64 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
 from .utils import send_email_otp
 
+
 class RegisterWithEmailSerializer(serializers.Serializer):
-    username = serializers.CharField()
+    name = serializers.CharField()
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
 
     def validate(self, attrs):
-        if User.objects.filter(username=attrs['username']).exists():
-            raise serializers.ValidationError({'username': 'Already taken'})
         if User.objects.filter(email=attrs['email']).exists():
             raise serializers.ValidationError({'email': 'Already registered'})
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
+        email = validated_data['email']
+        name = validated_data['name']
+        password = validated_data['password']
+
+     # Use email as username (unique constraint problem solved ✅)
         user = User(
-            username=validated_data['username'],
-            email=validated_data['email'],
+            username=email,
+            email= email,
+            first_name= name,
             is_active=True  # user stays active, we’ll check email_verified later
         )
-        user.set_password(validated_data['password'])
+        user.set_password(password)
         user.save()
 
         profile = UserProfile.objects.create(user=user)  # tenant left NULL
         profile.generate_email_otp()
         send_email_otp(user.email, profile.email_otp)
         return profile
+
+# class RegisterWithEmailSerializer(serializers.Serializer):
+#     username = serializers.CharField()
+#     email = serializers.EmailField()
+#     password = serializers.CharField(write_only=True, min_length=8)
+
+#     def validate(self, attrs):
+#         if User.objects.filter(username=attrs['username']).exists():
+#             raise serializers.ValidationError({'username': 'Already taken'})
+#         if User.objects.filter(email=attrs['email']).exists():
+#             raise serializers.ValidationError({'email': 'Already registered'})
+#         return attrs
+
+#     @transaction.atomic
+#     def create(self, validated_data):
+#         user = User(
+#             username=validated_data['username'],
+#             email=validated_data['email'],
+#             is_active=True  # user stays active, we’ll check email_verified later
+#         )
+#         user.set_password(validated_data['password'])
+#         user.save()
+
+#         profile = UserProfile.objects.create(user=user)  # tenant left NULL
+#         profile.generate_email_otp()
+#         send_email_otp(user.email, profile.email_otp)
+#         return profile
 
 class VerifyEmailOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
