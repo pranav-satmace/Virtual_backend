@@ -29,6 +29,14 @@ class VerifyEmailOTPView(APIView):
         ser.is_valid(raise_exception=True)
         data = ser.save()
         return Response(data, status=status.HTTP_200_OK)
+        
+        # 🔄 reorder tokens: access first, refresh second
+        # return Response({
+        #     "access": data['tokens']['access'],
+        #     "refresh": data['tokens']['refresh'],
+        #     "user_id": data['user_id'],
+        # }, status=status.HTTP_200_OK)
+
 
 class PatchedTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -48,7 +56,7 @@ class PatchedTokenObtainPairView(TokenViewBase):
     permission_classes = [AllowAny]
     serializer_class = PatchedTokenObtainPairSerializer
 
-    # 🔄 reorder tokens in response
+    #  reorder tokens in response
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:
@@ -63,7 +71,7 @@ class PatchedTokenObtainPairView(TokenViewBase):
 class CustomTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
 
-    # 🔄 reorder tokens in response
+    #  reorder tokens in response
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:

@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure--fr^tr76it=o%aeshd51_58sry%hkdw0$*41&$!!4#qmh4*3cp
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.1.9', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['192.168.1.9', '127.0.0.1', 'localhost','192.168.1.15']
 
 
 # Application definition
@@ -59,6 +59,14 @@ REST_FRAMEWORK = {
     ),
 }
 
+# USE_JWT = False  # set True when you want JWT
+
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'rest_framework.authentication.SessionAuthentication',
+#         'rest_framework.authentication.BasicAuthentication',
+#     ) + (('rest_framework_simplejwt.authentication.JWTAuthentication',) if USE_JWT else ())
+# }
 
 
 from datetime import timedelta

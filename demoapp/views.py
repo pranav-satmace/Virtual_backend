@@ -36,11 +36,14 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # only return the logged-in user
         return User.objects.filter(id=self.request.user.id)
-    
+
 class UserProfileViewSet(viewsets.ModelViewSet):
-    queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = [permissions.AllowAny]  # change to IsAuthenticated in production
+    permission_classes = [IsAuthenticated]  # Only logged-in users can access
+
+    def get_queryset(self):
+        # Return only the profile linked to the logged-in user
+        return UserProfile.objects.filter(user=self.request.user)
 
 
 class TenantSetupViewSet(viewsets.ViewSet):
@@ -153,4 +156,13 @@ class DispatchOrderViewSet(viewsets.ModelViewSet):
     queryset = DispatchOrder.objects.all().order_by("-dispatch_date")
     serializer_class = DispatchOrderSerializer
     permission_classes = [IsAuthenticated]
+
+
+
+
+
+# class UserProfileViewSet(viewsets.ModelViewSet):
+#     queryset = UserProfile.objects.all()
+#     serializer_class = UserProfileSerializer
+#     permission_classes = [permissions.AllowAny]  # change to IsAuthenticated in production
 
