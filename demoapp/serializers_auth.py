@@ -6,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import UserProfile
 from .utils import send_email_otp
+from .models import Tenant
 
 
 class RegisterWithEmailSerializer(serializers.Serializer):
@@ -33,8 +34,10 @@ class RegisterWithEmailSerializer(serializers.Serializer):
         )
         user.set_password(password)
         user.save()
+        # get TEMP tenant
+        temp_tenant = Tenant.objects.get(short_code="TDT001")
 
-        profile = UserProfile.objects.create(user=user)  # tenant left NULL
+        profile = UserProfile.objects.create(user=user,  tenant=temp_tenant)  # tenant left NULL
         profile.generate_email_otp()
         send_email_otp(user.email, profile.email_otp)
         return profile

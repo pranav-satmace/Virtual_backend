@@ -190,14 +190,15 @@ class AbstractBankAccount(Model):
 
 class AbstractAddress(Model):
     address_line = TextField()
-    latitude = FloatField(blank=True)
-    longitude = FloatField(blank=True)
+    latitude = FloatField(blank=True, null=True)
+    longitude = FloatField(blank=True,null=True)
     postal_code = IntegerField(blank=True, null=True)
-    city = CharField(max_length=255, blank=True)
-    state = CharField(max_length=255, blank=True)
+    city = CharField(max_length=255, blank=True,null=True)
+    state = CharField(max_length=255, blank=True,null=True)
     country = CharField(
-        max_length=2, choices=list(CountryField().choices), default="IN"
-    )
+        max_length=5
+        #, choices=list(CountryField().choices), default="IN"
+    ) 
     #places_api_json = JSONField(default=dict, blank=True, null=True)
 #places_api_json = JSONField(blank=True, null=False)  # likely this setup
 

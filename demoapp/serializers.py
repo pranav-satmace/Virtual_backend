@@ -130,27 +130,16 @@ class AddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Address
         fields = "__all__"
+        read_only_fields = ["tenant"]  # 👈 tenant user se nahi aayega
+
 
     # def create(self, validated_data):
     #     if validated_data.get("places_api_json") is None:
     #         validated_data["places_api_json"] = {}
     #     return super().create(validated_data)
-
 class EntitySerializer(serializers.ModelSerializer):
-    # registered_address = AddressSerializer(read_only=True)
     registered_address = AddressSerializer()
-    # registered_address = AddressSerializer(required=False)
-    # registered_address = AddressSerializer()
     currency = CurrencySerializer(read_only=True)
-
-    # registered_address_id = serializers.PrimaryKeyRelatedField(
-    #     queryset=Address.objects.all(),
-    #     source="registered_address",
-    #     write_only=True,
-    #     required=False,
-    #     allow_null=True
-    # )
-
     currency_id = serializers.PrimaryKeyRelatedField(
         queryset=Currency.objects.all(),
         source="currency",
@@ -163,57 +152,59 @@ class EntitySerializer(serializers.ModelSerializer):
             "id",
             "name",
             "registered_address",
-            # "registered_address_id",
             "currency",
             "currency_id",
             "short_name",
             "logo",
             "contact_name",
             "bank_details",
-            # "is_active",  # Fix: take from CreateUpdateStatus
         ]
+        read_only_fields = ["short_name", "tenant", "is_archived"]
+ 
+    def create(self, validated_data):   # ✅ ab sahi jagah indent
+        request = self.context.get("request")
+        user = request.user
+        profile = user.userprofile
 
-        read_only_fields = ["short_name","tenant", "is_archived"]
-
-    def create(self, validated_data):
-        # Pop nested fields
+        # Pop nested address
         registered_address_data = validated_data.pop("registered_address", None)
-        # if registered_address_data:
-        #     if registered_address_data.get("places_api_json") is None:
-        #         registered_address_data["places_api_json"] = {}
-        #     address = Address.objects.create(**registered_address_data)
-
         currency = validated_data.pop("currency", None)
 
-        # Create Address instance if data exists
         address = None
         if registered_address_data:
-            address = Address.objects.create(**registered_address_data)
+            address = Address.objects.create(
+                **registered_address_data,
+                tenant=profile.tenant   # initially temp tenant
+            )
 
-        # Auto-create ReportingTenant + Tenant
         entity_name = validated_data.get("name")
         prefix = _prefix_from_name(entity_name)
-
-        rt = ReportingTenant.objects.create(
-            name=entity_name,
-            status="Active",
-            short_code=_next_running(ReportingTenant, prefix)
-        )
-
-        tenant = Tenant.objects.create(
-            reporting_tenant=rt,
-            name=entity_name,
-            status="Active",
-            short_code=_next_running(Tenant, prefix)
-        )
-
-        # Auto-generate short_name for Entity
         short_name = _next_running(Entity, prefix, field="short_name")
 
-        # Save Entity
+        # 🔥 If profile has only TEMP Tenant → create new ReportingTenant + Tenant
+        if profile.tenant and profile.tenant.name == "TEMP Tenant":
+            rt = ReportingTenant.objects.create(
+                name=entity_name,
+                status="Active",
+                short_code=_next_running(ReportingTenant, prefix),
+            )
+            tenant = Tenant.objects.create(
+                reporting_tenant=rt,
+                name=entity_name,
+                status="Active",
+                short_code=_next_running(Tenant, prefix),
+            )
+
+            # 👇 update userprofile to actual tenant
+            profile.tenant = tenant
+            profile.save()
+        else:
+            # already has a proper tenant
+            tenant = profile.tenant
+
         entity = Entity.objects.create(
             **validated_data,
-            registered_address=address,  # assign created Address
+            registered_address=address,
             currency=currency,
             short_name=short_name,
             tenant=tenant
@@ -221,13 +212,170 @@ class EntitySerializer(serializers.ModelSerializer):
 
         return entity
 
+# class EntitySerializer(serializers.ModelSerializer):
+#     # registered_address = AddressSerializer(read_only=True)
+#     registered_address = AddressSerializer()
+#     # registered_address = AddressSerializer(required=False)
+#     # registered_address = AddressSerializer()
+#     currency = CurrencySerializer(read_only=True)
+
+#     # registered_address_id = serializers.PrimaryKeyRelatedField(
+#     #     queryset=Address.objects.all(),
+#     #     source="registered_address",
+#     #     write_only=True,
+#     #     required=False,
+#     #     allow_null=True
+#     # )
+
+#     currency_id = serializers.PrimaryKeyRelatedField(
+#         queryset=Currency.objects.all(),
+#         source="currency",
+#         write_only=True
+#     )
+
+#     class Meta:
+#         model = Entity
+#         fields = [
+#             "id",
+#             "name",
+#             "registered_address",
+#             # "registered_address_id",
+#             "currency",
+#             "currency_id",
+#             "short_name",
+#             "logo",
+#             "contact_name",
+#             "bank_details",
+#             # "is_active",  # Fix: take from CreateUpdateStatus
+#         ]
+
+#         read_only_fields = ["short_name","tenant", "is_archived"]
+
+#     def create(self, validated_data):
+#         # Pop nested fields
+#         registered_address_data = validated_data.pop("registered_address", None)
+#         # if registered_address_data:
+#         #     if registered_address_data.get("places_api_json") is None:
+#         #         registered_address_data["places_api_json"] = {}
+#         #     address = Address.objects.create(**registered_address_data)
+
+#         currency = validated_data.pop("currency", None)
+
+#         # Create Address instance if data exists
+#         address = None
+#         if registered_address_data:
+#             address = Address.objects.create(**registered_address_data)
+
+#         # Auto-create ReportingTenant + Tenant
+#         entity_name = validated_data.get("name")
+#         prefix = _prefix_from_name(entity_name)
+
+#         rt = ReportingTenant.objects.create(
+#             name=entity_name,
+#             status="Active",
+#             short_code=_next_running(ReportingTenant, prefix)
+#         )
+
+#         tenant = Tenant.objects.create(
+#             reporting_tenant=rt,
+#             name=entity_name,
+#             status="Active",
+#             short_code=_next_running(Tenant, prefix)
+#         )
+
+#         # Auto-generate short_name for Entity
+#         short_name = _next_running(Entity, prefix, field="short_name")
+
+#         # Save Entity
+#         entity = Entity.objects.create(
+#             **validated_data,
+#             registered_address=address,  # assign created Address
+#             currency=currency,
+#             short_name=short_name,
+#             tenant=tenant
+#         )
+
+#         return entity
+
+# class CenterSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Center
+#         fields = "__all__"
+#         read_only_fields = ["short_name", "is_archived", "is_active", "code"]
+
+# class CenterSerializer(serializers.ModelSerializer):
+#     tenant_name = serializers.CharField(source="tenant.name", read_only=True)
+#     entity_name = serializers.CharField(source="entity.name", read_only=True)
+#     center_address = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = Center
+#         fields = "__all__"
+#         read_only_fields = [
+#             "short_name",
+#             "is_archived",
+#             "is_active",
+#             "code",
+#             "tenant",
+#             "entity",
+#             "center_address",
+#         ]
+
+#     def get_center_address(self, obj):
+#         if obj.center_address:
+#             return {
+#                 "id": obj.center_address.id,
+#                 "line1": obj.center_address.address_line,
+#                 "city": obj.center_address.city,
+#                 "state": obj.center_address.state,
+#                 "country": obj.center_address.country,
+#                 "postal_code": obj.center_address.postal_code,
+#             }
+#         return None
+
+#     def create(self, validated_data):
+#         user = self.context["request"].user
+#         tenant = user.userprofile.tenant
+
+#         # ✅ first entity of this tenant (or choose based on request if needed)
+#         entity = Entity.objects.filter(tenant=tenant).first()
+
+#         if not entity:
+#             raise serializers.ValidationError("No entity found for this tenant.")
+
+#         # ✅ center address same as entity.registered_address
+#         validated_data["tenant"] = tenant
+#         validated_data["entity"] = entity
+#         validated_data["center_address"] = entity.registered_address
+
+#         return super().create(validated_data)
+
+#     def update(self, instance, validated_data):
+#         user = self.context["request"].user
+#         tenant = user.userprofile.tenant
+#         entity = Entity.objects.filter(tenant=tenant).first()
+
+#         validated_data["tenant"] = tenant
+#         validated_data["entity"] = entity
+#         validated_data["center_address"] = entity.registered_address
+
+#         return super().update(instance, validated_data)
+
 class CenterSerializer(serializers.ModelSerializer):
+    center_address = serializers.PrimaryKeyRelatedField(
+        read_only=True
+    )
+
     class Meta:
         model = Center
         fields = "__all__"
-        read_only_fields = ["short_name", "is_archived", "is_active", "code"]
-
-
+        read_only_fields = [
+            "short_name",
+            "is_archived",
+            "is_active",
+            "code",
+            "center_address",
+        ]
 
 
 class WarehouseSerializer(serializers.ModelSerializer):

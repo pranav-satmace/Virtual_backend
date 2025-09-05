@@ -211,7 +211,7 @@ class UserProfile(Model):
     # tenant = ForeignKey(Tenant, on_delete=PROTECT
     #     #, limit_choices_to=limit_to_active
     # )
-    tenant = models.ForeignKey("Tenant", on_delete=models.PROTECT, null=True, blank=True)  # now optional
+    tenant = models.ForeignKey("Tenant", on_delete=models.PROTECT)
 
     user = OneToOneField(to=User, on_delete=PROTECT)
     country = CharField(max_length=2, choices=list(CountryField().choices), default="IN")
@@ -538,7 +538,8 @@ class EntityUserAccess(models.Model):
 # def default_expiry_date():
 #     return (timezone.now() + timedelta(days=365*100)).date()
 
-class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
+# class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
+class Center(CreateUpdateStatus, ArchiveField):
     # --- Old Meta (commented out) ---
     # class Meta:
     #     unique_together = (
@@ -550,7 +551,13 @@ class Center(CreateUpdateStatus, ArchiveField, AbstractAddress):
     #             SearchVector("name", config="english"), name="center_name_gin"
     #         ),
     #     ]
-
+    center_address = ForeignKey(
+        to="Address",
+        on_delete=PROTECT,
+        related_name="center_address",
+        blank=True,
+        null=True,
+    )
     class Meta:
         unique_together = (("short_name", "tenant"),)
         indexes = [

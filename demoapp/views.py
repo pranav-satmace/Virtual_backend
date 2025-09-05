@@ -26,6 +26,7 @@ from .serializers import TradePartnerSerializer, GoodsReceiptNoteSerializer, Grn
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.permissions import AllowAny
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -39,11 +40,12 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class UserProfileViewSet(viewsets.ModelViewSet):
     serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated]  # Only logged-in users can access
+    permission_classes = [AllowAny]  # Only logged-in users can access
 
     def get_queryset(self):
         # Return only the profile linked to the logged-in user
-        return UserProfile.objects.filter(user=self.request.user)
+    #    return UserProfile.objects.filter(user=self.request.user)
+     return UserProfile.objects.all()
 
 
 class TenantSetupViewSet(viewsets.ViewSet):
@@ -110,17 +112,63 @@ class TenantSetupViewSet(viewsets.ViewSet):
 #     permission_classes = [IsAuthenticated]
 
 
+# class EntityViewSet(viewsets.ModelViewSet):
+#     queryset = Entity.objects.all()
+#     serializer_class = EntitySerializer
+#     permission_classes = [AllowAny]
+
 class EntityViewSet(viewsets.ModelViewSet):
-    queryset = Entity.objects.all()
     serializer_class = EntitySerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, "userprofile") and user.userprofile.tenant:
+            return Entity.objects.filter(tenant=user.userprofile.tenant)
+        return Entity.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save()
 
 
+# class CenterViewSet(viewsets.ModelViewSet):
+#     queryset = Center.objects.all()
+#     serializer_class = CenterSerializer
+#     permission_classes = [IsAuthenticated]
+# class CenterViewSet(viewsets.ModelViewSet):
+#     serializer_class = CenterSerializer
+#     permission_classes = [IsAuthenticated]
+
+#     def get_queryset(self):
+#         user = self.request.user
+#         tenant = user.userprofile.tenant
+#         return Center.objects.filter(tenant=tenant)
 class CenterViewSet(viewsets.ModelViewSet):
-    queryset = Center.objects.all()
     serializer_class = CenterSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, "userprofile"):
+            tenant = user.userprofile.tenant
+            entity = user.userprofile.entity  # Assuming userprofile has entity
+            return Center.objects.filter(tenant=tenant, entity=entity)
+        return Center.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        entity_address = getattr(user.userprofile.entity, "entity_address", None)
+        serializer.save(
+            tenant=user.userprofile.tenant,
+            entity=user.userprofile.entity,
+            center_address=entity_address,
+        )
+
+    def perform_update(self, serializer):
+        # Ensure center_address stays same as entity_address
+        user = self.request.user
+        entity_address = getattr(user.userprofile.entity, "entity_address", None)
+        serializer.save(center_address=entity_address)
 
 
 
