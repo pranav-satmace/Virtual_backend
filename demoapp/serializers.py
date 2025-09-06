@@ -361,10 +361,10 @@ class EntitySerializer(serializers.ModelSerializer):
 
 #         return super().update(instance, validated_data)
 
+# serializers.py
 class CenterSerializer(serializers.ModelSerializer):
-    center_address = serializers.PrimaryKeyRelatedField(
-        read_only=True
-    )
+    tenant_name = serializers.CharField(source="tenant.name", read_only=True)
+    entity_name = serializers.CharField(source="entity.name", read_only=True)
 
     class Meta:
         model = Center
@@ -374,7 +374,8 @@ class CenterSerializer(serializers.ModelSerializer):
             "is_archived",
             "is_active",
             "code",
-            "center_address",
+            "center_address",   # 👈 auto-fill
+            "tenant",           # 👈 auto-fill
         ]
 
 
