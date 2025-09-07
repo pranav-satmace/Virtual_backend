@@ -149,28 +149,11 @@ class CenterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if hasattr(user, "userprofile"):
-            tenant = user.userprofile.tenant
-            entity = user.userprofile.entity  # Assuming userprofile has entity
-            return Center.objects.filter(tenant=tenant, entity=entity)
-        return Center.objects.none()
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        entity_address = getattr(user.userprofile.entity, "entity_address", None)
-        serializer.save(
-            tenant=user.userprofile.tenant,
-            entity=user.userprofile.entity,
-            center_address=entity_address,
-        )
-
-    def perform_update(self, serializer):
-        # Ensure center_address stays same as entity_address
-        user = self.request.user
-        entity_address = getattr(user.userprofile.entity, "entity_address", None)
-        serializer.save(center_address=entity_address)
-
-
+        try:
+            profile = user.userprofile
+        except UserProfile.DoesNotExist:
+            return Center.objects.none()
+        return Center.objects.filter(tenant=profile.tenant)
 
 class WarehouseViewSet(viewsets.ModelViewSet):
     queryset = Warehouse.objects.all()

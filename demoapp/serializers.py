@@ -361,11 +361,7 @@ class EntitySerializer(serializers.ModelSerializer):
 
 #         return super().update(instance, validated_data)
 
-# serializers.py
 class CenterSerializer(serializers.ModelSerializer):
-    tenant_name = serializers.CharField(source="tenant.name", read_only=True)
-    entity_name = serializers.CharField(source="entity.name", read_only=True)
-
     class Meta:
         model = Center
         fields = "__all__"
@@ -374,9 +370,40 @@ class CenterSerializer(serializers.ModelSerializer):
             "is_archived",
             "is_active",
             "code",
-            "center_address",   # 👈 auto-fill
-            "tenant",           # 👈 auto-fill
+            "tenant",
+            "center_address",
+            "entity",
         ]
+class CenterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Center
+        fields = "__all__"
+        read_only_fields = [
+            "short_name",
+            "is_archived",
+            "is_active",
+            "code",
+            "tenant",
+            "center_address",
+            "entity",
+        ]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        user = request.user
+        profile = user.userprofile
+
+        entity = Entity.objects.filter(tenant=profile.tenant).first()
+        if not entity:
+            raise serializers.ValidationError(
+                "No entity found for this user. Please create an entity first."
+            )
+
+        validated_data["entity"] = entity
+        validated_data["tenant"] = entity.tenant
+        validated_data["center_address"] = entity.registered_address
+
+        return super().create(validated_data)
 
 
 class WarehouseSerializer(serializers.ModelSerializer):

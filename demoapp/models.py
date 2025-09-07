@@ -551,6 +551,7 @@ class Center(CreateUpdateStatus, ArchiveField):
     #             SearchVector("name", config="english"), name="center_name_gin"
     #         ),
     #     ]
+    
     center_address = ForeignKey(
         to="Address",
         on_delete=PROTECT,
@@ -570,6 +571,7 @@ class Center(CreateUpdateStatus, ArchiveField):
         Tenant, on_delete=PROTECT,
          # limit_choices_to=limit_to_active
     )
+    entity = models.ForeignKey("Entity", on_delete=models.PROTECT)
     name = CharField(max_length=255)
     short_name = UpperCharField(max_length=16)
     code = UpperCharField(max_length=32, blank=True)
