@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure--fr^tr76it=o%aeshd51_58sry%hkdw0$*41&$!!4#qmh4*3cp
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.1.9', '127.0.0.1', 'localhost','192.168.1.15']
+ALLOWED_HOSTS = ['192.168.1.9', '127.0.0.1', 'localhost','192.168.1.15','192.168.1.61']
 
 
 # Application definition
@@ -72,7 +72,7 @@ REST_FRAMEWORK = {
 
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
     'ROTATE_REFRESH_TOKENS': True, # optional, rotates refresh on use
     'BLACKLIST_AFTER_ROTATION': True, # keep old refresh tokens invalid
@@ -128,8 +128,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'demo_db',       # your DB name
-        'USER': 'demo_user',     # your DB user
-        'PASSWORD': 'demo_pass', # your DB password
+        'PASSWORD': 'admin', # your DB password
+        'USER': 'sakshi',     # your DB user
         'HOST': 'localhost',
         'PORT': '5432',
     }

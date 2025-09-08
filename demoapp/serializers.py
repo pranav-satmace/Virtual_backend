@@ -361,19 +361,20 @@ class EntitySerializer(serializers.ModelSerializer):
 
 #         return super().update(instance, validated_data)
 
-class CenterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Center
-        fields = "__all__"
-        read_only_fields = [
-            "short_name",
-            "is_archived",
-            "is_active",
-            "code",
-            "tenant",
-            "center_address",
-            "entity",
-        ]
+# class CenterSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Center
+#         fields = "__all__"
+#         read_only_fields = [
+#             "short_name",
+#             "is_archived",
+#             "is_active",
+#             "code",
+#             "tenant",
+#             "center_address",
+#             "entity",
+#         ]
+
 class CenterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Center
